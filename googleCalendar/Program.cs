@@ -27,7 +27,6 @@ namespace test
         public static void Main()
         {
             // See https://aka.ms/new-console-template for more information
-            Console.WriteLine("Hello, World!");
             Settings settings = LoadSettings();
 
             var credential = GoogleWebAuthorizationBroker.AuthorizeAsync(
@@ -45,9 +44,9 @@ namespace test
                 HttpClientInitializer = credential,
                 ApplicationName = "Google Calender API v3",
             });
-                
+
             var queryStart = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
-            var queryEnd = queryStart.AddMonths(1);
+            var queryEnd = queryStart.AddDays(2);
 
             var query = service.Events.List(settings.calendarId);
             // query.OrderBy = EventsResource.ListRequest.OrderByEnum.StartTime; - not supported :(
@@ -57,14 +56,17 @@ namespace test
             var events = query.Execute().Items;
 
             var eventList = events.ToList();
-        
-            Console.WriteLine("Query from {0} to {1} returned {2} results", queryStart, queryEnd, eventList.Count);
 
+            Console.WriteLine("<div>Agenda</div>");
+            Console.WriteLine("<table>");
             foreach (var item in eventList)
             {
+                Console.WriteLine("<tr>");
                 //Console.WriteLine("{0}\t{1}", item.Item1, item.Item2);
-                Console.WriteLine("Event: {0} at {1} - {2}", item.Summary, item.Start.DateTime, item.End.DateTime);
+                Console.WriteLine("<td>{0}</td><td>{1}</td>", item.Summary, item.Start.DateTime, item.End.DateTime);
+                Console.WriteLine("</tr>");
             }
+            Console.WriteLine("</table>");
         }
 
     }
