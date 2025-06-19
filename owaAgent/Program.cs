@@ -17,3 +17,7 @@ var settings = new Settings(config);
 // See https://aka.ms/new-console-template for more information
 Console.WriteLine("Hello, World!");
 Console.WriteLine($"server url: {settings.ServerURI}");
+
+var owaAgent = new OwaAgent();
+
+owaAgent.GetEmail(settings);
