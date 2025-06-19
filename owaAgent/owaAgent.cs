@@ -7,7 +7,7 @@ namespace EmailAgent
 {
     public class OwaAgent
     {
-        static void GetEmail(Settings settings)
+        public void GetEmail(Settings settings)
         {
             // Initialize the Exchange Service
             ExchangeService service = new ExchangeService(ExchangeVersion.Exchange2013_SP1);
