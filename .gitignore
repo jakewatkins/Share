@@ -1,11 +1,11 @@
 Release.txt
 appsettings.local.json
 appsettings.development.json
-local.settings.json
-localqa.settings.json
-local.appsettings.json
 backend.tfs
 settings.json 
+
+*.settings.json
+
 
 .DS_Store
 .vs/
