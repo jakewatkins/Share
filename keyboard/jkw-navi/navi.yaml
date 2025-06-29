@@ -1,0 +1,139 @@
+
+presets:
+  # These presets provide different layout options
+  # Select a preset in the `units` section below
+  # Note: The appropriate switch footprint will still need to be set in the `pcb` section
+  defaults:
+    edgex: 16       # Edge cut distance horizontal
+    edgey: 16       # Edge cut distance vertical
+    capx: 17        # Key cap size horizontal
+    capy: 16        # Key cap size vertical
+    kx: 18.5        # Key spacing horizontal
+    ky: 17.5        # Key spacing vertical
+    pinky_splay: 5  # Degrees of splay between pinky and ring columns
+    pinky_adj: -3   # Adjustment to compensate for splay spacing
+    ring_splay: 3
+    ring_adj: -8
+    middle_splay: 0
+    middle_adj: 0
+
+
+points:
+  zones:
+    macropad:
+      columns:
+        pinky:
+        ring:
+        middle:
+        index:
+      rows:
+        bottom:
+        middle:
+        top:
+
+    navigator:
+      anchor:
+        ref: macropad_ring_top
+        shift: [-10,-5u]
+      rows:
+        down:
+        up:
+      columns:
+        left:
+          rows:
+            up.skip: true
+        updown:
+          key:
+            stagger: -10
+        right:
+          key:
+            stagger: 10
+          rows:
+            up.skip: true
+outlines:
+  macropac_perimeter:
+    - what: rectangle
+      bound: true
+      size: [15, 15]
+      where:
+        - /macropad_.*/
+  navigator_perimeter:
+      - what: rectangle
+        bound: true
+        size: [15, 15]
+        where:
+          - /navigator_.*/
+  pcb_perimeter:
+    - what: rectangle
+      bound: false
+      size: [5u,7u]
+      where:
+        ref: macropad_pinky_top
+        shift: [.5u, .5u]
+      
+      
+
+pcbs:
+  navigatorPCB:
+    outlines:
+      board:
+        outline: pcb_perimeter
+    footprints:
+      keys:
+        what: mx
+        where: true
+        params:
+          from: GND
+          to: "{{name}}"
+          reverse: true
+          keycaps: true
+      mcu:
+        what: promicro
+        where:
+          - ref: macropad_pinky_bottom
+            shift: [.5U, -1.25U]
+          
+        params:
+          P7: macropad_pinky_top
+          P18: macropad_ring_top
+          P19: macropad_middle_top
+          P20: macropad_index_top
+          P21: macropad_pinky_middle
+          P15: macropad_ring_middle
+          P14: macropad_middle_middle
+          P16: macropad_index_middle
+          P10: macropad_pinky_bottom
+          P1: macropad_ring_bottom
+          P2: macropad_middle_bottom
+          P3: macropad_index_bottom
+          P4: navigator_left_up
+          P5: navigator_updown_up
+          P6: navigator_updown_down
+          P8: navigator_right_down
+      battery:
+        what: jumper
+        params:
+          from: VCC
+          to: powerswitch
+        where:
+          - ref: macropad_pinky_bottom
+            shift: [5U, 1.25U]   
+      powerswitch:
+        what: slider
+        params:
+          from: battery
+          to: VCC   
+        where:
+          - ref: macropad_pinky_bottom
+            shift: [5U, 1.5U]        
+      reset:
+        what: button
+        where:
+          ref:
+            - macropad_pinky_bottom
+          shift: [5u, 3u]
+          rotate: 90
+        params:
+          from: RST
+          to: GND         
+          
