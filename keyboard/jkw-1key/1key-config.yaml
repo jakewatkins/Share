@@ -1,0 +1,81 @@
+meta:
+  engine: 4.1.0
+# U is a predefined unit of measure that means 19.05mm, which is MX spacing (u is 19.00mm)
+points:
+  zones:
+    matrix:
+      columns:
+        pinky:
+      rows:
+        bottom.padding: U
+
+pcbs:
+  simple_split:
+    template: kicad8
+    footprints:
+      keys:
+        what: ceoloide/switch_mx
+        where: true
+        params:
+          from: GND
+          to: "{{name}}"
+          reversible: true
+          solder: true
+          include_keycap: true
+      trrs:
+        what: trrs
+        where:
+          ref: matrix_pinky_bottom
+          shift: [2, 1.1u]
+          rotate: 0
+        params:
+          A: GND
+          B: GND
+          C: BAT
+          D: VCC
+          reverse: true
+          symmetric: true
+      reset:
+        what: button
+        where:
+          ref:
+            - matrix_pinky_bottom
+          shift: [-0.7u, 0]
+          rotate: 90
+        params:
+          from: RST
+          to: GND
+      jstph:
+        what: jstph
+        where:
+          ref: matrix_pinky_bottom
+          shift: [0.5cx, -1.5cy]
+          rotate: 180
+        params:
+          pos: BAT
+          neg: GND
+      mcu:
+        what: ceoloide/mcu_nice_nano
+        where:
+          - ref: matrix_pinky_bottom
+            shift: [1U, 0.5U]
+            rotate: -90
+        params:
+          P7_label: P7
+          P18_label: P18
+          P19_label: P19
+          P20_label: P20
+          P21_label: P21
+          P15_label: P15
+          P14_label: P14
+          P16_label: P16
+          P10_label: P10
+          P1: matrix_pinky_bottom
+          P1_label: P1
+          P2_label: P2
+          P3_label: P3
+          P4_label: P4
+          P5_label: P5
+          P6_label: P6
+          P8_label: P8
+
