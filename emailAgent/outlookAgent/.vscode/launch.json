@@ -10,7 +10,11 @@
       "args": [],
       "cwd": "${workspaceFolder}",
       "stopAtEntry": false,
-      "console": "internalConsole"
+      "console": "internalConsole",
+      "env": {
+        "valetClientId": "c4465f79-76b9-4424-be78-fa9ec3cc3d32",
+        "valetSecret": "your-azure-app-secret-here"
+      }
     }
   ]
 }

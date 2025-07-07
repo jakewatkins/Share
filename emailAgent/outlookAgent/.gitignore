@@ -6,6 +6,9 @@ settings.json
 
 *.settings.json
 
+# Environment variables file
+.env
+setEnv.sh
 
 .DS_Store
 .vs/
