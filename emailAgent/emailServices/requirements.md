@@ -1,0 +1,100 @@
+# EmailAgent.emailServices
+- this is a .net 8.0 library that will be share
+- coding will follow the guidelines provided in ../rules.md
+- emailServices library provides email services to other applications so they are able to fetch and process email.
+- There will be 3 separate services in the libary:
+    - a service to fetch email from google's gmail service
+    - a service to fetch email from Microsoft's Outlook email service
+    - a service to fetch email from Microsoft's OWA api
+- there will be entities shared across services to represent different parts of emails: 
+    - an email entity
+    - an attachement entity
+    - other entities as required
+- the library will use Microsoft .net configuration to load settings
+- some setting will be stored in a Microsoft Azure Key Vault
+    - the library does not need to worry about autheticating with Microsoft Azure in order to access the Key Vault.
+    - the calling application will be responsible for authenticating with Microsoft Azure.
+- Settings.json will contain configuration information used by the email services in the library
+    - the application's components will directly use the IConfigureation interface to get settings
+    - keyvaultName will store the name of the keyvault that holds secrets for the application
+    - RetrievalCount is an integer that will be used to determine how many emails to be retrieved at a time
+        - if this setting is missing a default value of 500 will be used
+    - MaxAttachmentSize is an integer representing, in bytes, how big an attachment can be
+        - if this setting is missing a default value of 1MB
+    - serilog settings will be included in settings.json 
+        - this should include the normal serilog settings along with the configuration for the file sink for logging
+        - the log file can be place in the application's working directory
+        - use reasonable default settings for all serilog settings
+- Use serilog to log to a file for debugging, just use the filename in the settings.
+- for configuration purposes, we pass the IConfiguration interface to classes
+
+# Requirement 1 - email entities
+- use EmailAgent.Entities as the namespace for entities
+- put the entities in their own folder in the project
+- review the other three project in the solution (gmailAgent, outlookAgent, owaAgent)
+- create entities to represent email and attachments that will meet the needs of the services we will create in the future
+- the entities will be POCOs and should not contain any business logic
+- the entities should be serializable to json
+- In general we want to avoid duplicating properties just because services call things differently.
+- In the case of the email body, we will only have one body.
+    - in the case of gmail we will favor the HTML body of plaintext
+- We do want to be able to differentiate which mailbox each email came from so adding an email service indicator (an enum for example) would be a good idea.
+- we will want to use the Request/Response entity pattern used in the gmailAgent
+    - the entities will be shared across services (everybody uses the same one)
+
+# Requirement 2 - Configuration loader
+- use EmailAgent.Core as the namespace
+- put the AgentConfiguration class in the Core folder
+- the constructor for AgentConfiguration will take an IConfiguration entity
+- the class will load configuration settings from the Azure Key Vault so the services don't have to deal with the key vault
+- the class will load everything from the key vault as a part of its construction
+    - implement the constructor so it is not asynchronous.  Use await or some other approach to wait for completion of operations.
+- each of the keyvault secrets will be represented as public properties on the class:
+    - owaServiceURI
+    - owaPassword
+    - owaEmailAddress
+    - googleCalendarId
+    - googleClientId
+    - googleClientSecret
+    - outlookClientId
+    - outlookSecret
+- have properties for general email agent configuration
+    - keyvaultName
+    - RetrievalCount (positive integer)
+    - MaxAttachmentSize (positive integer)
+ - if the service is unable to retrieve secrets from the keyvault an exception should be thrown
+ - if keyvaultName is missing from settings.json an exception should be thrown
+ - if the values are missing from settings.json use default values:
+    - RetrievalCount = 500
+    - MaxAttachmentSize = 1048576
+ - we don't need to worry about other configuration stuff (ie Serilog)
+
+# Requirements 3 - OWA Service 
+- use EmailAgent.Services as the namespace
+- put the OwaService class in the service folder
+- No interface will be needed for this class
+- Create the OWA Service base on the code in the owaAgent project
+- Use Microsoft.Exchange.WebServices nuget library to access the OWA API
+    - Use WebCredentails to authenticate with the service
+    - if authetication fails just throw an exception
+- the constructor will take an instance of AgentConfiguration to get to the configuration information
+    - owaServiceURI
+    - owaPassword
+    - owaEmailAddress
+- if the configuration values are missing, throw an exception
+- ILogger will be passed to the constructor and should be saved as a private field to be used
+- no retry logic is needed, if a call fails: throw an exception and provide information so it can be debugged
+- the main method will be GetEmail
+    - await all asynchronous calls so clients do not have to be multithreaded
+- Use the GetEmailRequest entity as the input for retrieving emails 
+- Retrieve the oldest emails first
+- Leave emails marked unread
+- Only retrieve information about attachments
+    - file name
+    - file type (jpg, pdf, doc, etc)
+    - attachment size in bytes
+- use the NumberOfEmails to control how many emails to retrieve
+- map the retrieved emails to Entities.Email and add them to GetEmailResponse.Emails collection
+    - Do not worry about other fields in the EWS email entity
+    - if an email has multiple email formats, favor HTML over plain text
+- if there is an error put the error information the the response object
