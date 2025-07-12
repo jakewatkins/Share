@@ -12,6 +12,7 @@ class Program
         var configuration = new ConfigurationBuilder()
             .SetBasePath(Directory.GetCurrentDirectory())
             .AddJsonFile("settings.json", optional: false, reloadOnChange: true)
+            .AddJsonFile("settings.development.json", optional: true, reloadOnChange: true)
             .Build();
 
         // Configure Serilog
