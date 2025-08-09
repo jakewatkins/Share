@@ -98,6 +98,78 @@ var agentConfig = new AgentConfiguration(configuration);
 
 ## Email Services
 
+All email services are in the `EmailAgent.Services` namespace and follow consistent patterns:
+
+### GmailService
+
+Provides Gmail integration using Google's Gmail API v1.
+
+**Configuration Requirements:**
+- `GoogleClientId` - OAuth2 client ID for Gmail API access
+- `GoogleClientSecret` - OAuth2 client secret for Gmail API access  
+- `GoogleCalendarId` - Email address for authentication (shared with calendar service)
+
+**Features:**
+- OAuth2 authentication using GoogleWebAuthorizationBroker
+- Retrieves oldest emails first
+- Preserves unread status
+- HTML body preferred over plain text
+- Attachment metadata only (filename, type, size)
+- Rate limiting for API calls
+
+**Usage:**
+```csharp
+var gmailService = new GmailService(agentConfiguration, logger);
+var response = await gmailService.GetEmail(request);
+```
+
+### OutlookService
+
+Provides Microsoft Outlook integration using Microsoft Graph API.
+
+**Configuration Requirements:**
+- `outlookClientId` - Azure AD application client ID
+- `outlookSecret` - Azure AD application client secret
+
+**Features:**
+- Interactive OAuth2 authentication using PublicClientApplicationBuilder
+- Microsoft Graph API integration
+- Retrieves oldest emails first
+- Preserves unread status
+- HTML body preferred over plain text
+- Attachment metadata only (filename, type, size)
+
+**Usage:**
+```csharp
+var outlookService = new OutlookService(agentConfiguration, logger);
+var response = await outlookService.GetEmail(request);
+```
+
+### OwaService
+
+Provides OWA (Outlook Web Access) integration using Exchange Web Services.
+
+**Configuration Requirements:**
+- `owaServiceURI` - Exchange Web Services endpoint URL
+- `owaPassword` - Password for authentication
+- `owaEmailAddress` - Email address for authentication
+
+**Features:**
+- WebCredentials authentication
+- Exchange Web Services (EWS) integration
+- Retrieves oldest emails first
+- Preserves unread status
+- HTML body preferred over plain text
+- Attachment metadata only (filename, type, size)
+
+**Usage:**
+```csharp
+var owaService = new OwaService(agentConfiguration, logger);
+var response = await owaService.GetEmail(request);
+```
+
+## Common Service Patterns
+
 The library includes concrete service implementations in the `EmailAgent.Services` namespace.
 
 ### OwaService
@@ -221,5 +293,7 @@ foreach (var email in response.Emails)
 - Microsoft.Graph
 - Microsoft.Graph.Auth
 - Microsoft.Identity.Client
+- Google.Apis.Gmail.v1
+- Google.Apis.Auth
 - Serilog
 - System.Text.Json

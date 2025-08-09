@@ -129,3 +129,38 @@
     - Do not worry about other fields in the Graph.Message entity
     - if an email has multiple email formats, favor HTML over plain text
 - if there is an error put the error information the the response object
+
+# Requirement 5 gmail Service
+- use EmailAgent.Services as the namespace
+- GmailService will use Google's Google.Apis.Gmail.v1 and related packages so those nuget packages will need to be added to the project
+- put the GmailService class in the service folder
+- No interface will be needed for this class
+- Create the GMail Service based on the code in the gmailAgent project (../gmailAgent/gmailAgent.csproj)
+- the constructor will take an instance of AgentConfiguration to get to the configuration information
+    - GoogleCalendarId
+        - this is actually the email address, but b/c it is shared by an earlier service we'll continue using it as is.
+    - GoogleClientId
+    - GoogleClientSecret
+    - the values will come from the AgentConfiguration object
+- if the configuration values are missing, throw an exception
+- ILogger will be passed to the constructor and should be saved as a private field to be used
+- no retry logic is needed, if a call fails: throw an exception and provide information so it can be debugged
+- to authenticate with Google's email service use the GoogleWebAuthorizationBroker 
+    - an example of this can be seen in ../gmailAgent/gmailAgent.cs lines 129 to 155.
+        - Please review the code in ../gmailAgent/gmailAgent.cs to see how I've done this previously.
+    - We want GmailService.Scope.GmailModify permission, falling back to GmailReadonly is acceptable
+- the main method will be GetEmail
+    - await all asynchronous calls so clients do not have to be multithreaded
+- Use the GetEmailRequest entity as the input for retrieving emails 
+- To retrieve emails from gmail, see my code in GetInboxMessages found in ../gmailAgent/gmailAgent.cs the method starts at line 160
+- Leave emails marked unread
+- Only retrieve information about attachments
+    - file name
+    - file type (jpg, pdf, doc, etc)
+    - attachment size in bytes
+- use the NumberOfEmails to control how many emails to retrieve
+- map the retrieved emails to Entities.Email and add them to GetEmailResponse.Emails collection
+    - Do not worry about other fields in the Gmail Message entity
+    - if an email has multiple email formats, favor HTML over plain text
+    - you can follow my code in ../gmailAgent/gmailAgent.cs method ParseMessagePart starting at line 265 which calls GetMessagePartContent starting at line 300.
+- if there is an error put the error information the the response object
