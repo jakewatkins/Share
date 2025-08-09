@@ -69,7 +69,7 @@
     - MaxAttachmentSize = 1048576
  - we don't need to worry about other configuration stuff (ie Serilog)
 
-# Requirements 3 - OWA Service 
+# Requirement 3 - OWA Service 
 - use EmailAgent.Services as the namespace
 - put the OwaService class in the service folder
 - No interface will be needed for this class
@@ -96,5 +96,36 @@
 - use the NumberOfEmails to control how many emails to retrieve
 - map the retrieved emails to Entities.Email and add them to GetEmailResponse.Emails collection
     - Do not worry about other fields in the EWS email entity
+    - if an email has multiple email formats, favor HTML over plain text
+- if there is an error put the error information the the response object
+
+# Requirement 4 - outlook Service
+- use EmailAgent.Services as the namespace
+- OutlookService will use Microsoft's Graph SDK so those nuget packages will need to be added to the project
+- put the OutlookService class in the service folder
+- No interface will be needed for this class
+- Create the Outlook Service base on the code in the outlookAgent project (../outlookAgent/outlookAgent.csproj)
+- the constructor will take an instance of AgentConfiguration to get to the configuration information
+    - outlookClientId
+    - outlookSecret
+    - both values will come from the AgentConfiguration object
+- if the configuration values are missing, throw an exception
+- ILogger will be passed to the constructor and should be saved as a private field to be used
+- no retry logic is needed, if a call fails: throw an exception and provide information so it can be debugged
+- to authenticate with Microsoft's outlook service use the PublicClientApplicationBuilder 
+    - an example of this can be seen in ../outlookAgent/outlookAgent.cs lines 48 to 59.
+    - the scopes will be "Mail.Read", "Mail.ReadWrite"
+- the main method will be GetEmail
+    - await all asynchronous calls so clients do not have to be multithreaded
+- Use the GetEmailRequest entity as the input for retrieving emails 
+- Retrieve the oldest emails first
+- Leave emails marked unread
+- Only retrieve information about attachments
+    - file name
+    - file type (jpg, pdf, doc, etc)
+    - attachment size in bytes
+- use the NumberOfEmails to control how many emails to retrieve
+- map the retrieved emails to Entities.Email and add them to GetEmailResponse.Emails collection
+    - Do not worry about other fields in the Graph.Message entity
     - if an email has multiple email formats, favor HTML over plain text
 - if there is an error put the error information the the response object

@@ -135,6 +135,41 @@ if (response.Success)
 - `OwaEmailAddress` - Authentication email
 - `OwaPassword` - Authentication password
 
+### OutlookService
+
+Provides email retrieval functionality for Microsoft Outlook using Microsoft Graph API.
+
+```csharp
+// Initialize service
+var outlookService = new OutlookService(agentConfiguration, logger);
+
+// Retrieve emails
+var request = new GetEmailRequest { StartIndex = 0, NumberOfEmails = 10 };
+var response = await outlookService.GetEmail(request);
+
+if (response.Success)
+{
+    Console.WriteLine($"Retrieved {response.Count} emails");
+    foreach (var email in response.Emails)
+    {
+        Console.WriteLine($"Subject: {email.Subject}");
+    }
+}
+```
+
+**Features:**
+- Interactive OAuth2 authentication
+- Microsoft Graph API integration
+- Oldest-first email retrieval
+- Attachment metadata extraction
+- HTML body preference
+- Comprehensive error handling
+- Integrated logging
+
+**Configuration Requirements:**
+- `OutlookClientId` - Azure AD application client ID
+- `OutlookSecret` - Azure AD application client secret
+
 ## Design Principles
 
 1. **Single Responsibility** - Each entity has a clear, focused purpose
@@ -179,8 +214,12 @@ foreach (var email in response.Emails)
 - .NET 8.0
 - Microsoft.Extensions.Configuration
 - Microsoft.Extensions.Logging.Abstractions
+- Microsoft.Extensions.Logging
 - Azure.Security.KeyVault.Secrets
 - Azure.Identity
 - Microsoft.Exchange.WebServices
+- Microsoft.Graph
+- Microsoft.Graph.Auth
+- Microsoft.Identity.Client
 - Serilog
 - System.Text.Json

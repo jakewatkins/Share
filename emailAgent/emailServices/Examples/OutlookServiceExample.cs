@@ -7,12 +7,12 @@ using EmailAgent.Entities;
 namespace EmailAgent.Examples;
 
 /// <summary>
-/// Example usage of the OwaService
+/// Example usage of the OutlookService
 /// </summary>
-public class OwaServiceExample
+public class OutlookServiceExample
 {
     /// <summary>
-    /// Demonstrates how to use the OwaService to retrieve emails
+    /// Demonstrates how to use the OutlookService to retrieve emails
     /// </summary>
     public static async Task RunExample()
     {
@@ -24,7 +24,7 @@ public class OwaServiceExample
         // Setup logging
         using var loggerFactory = Microsoft.Extensions.Logging.LoggerFactory.Create(builder =>
             builder.AddConsole().SetMinimumLevel(LogLevel.Information));
-        var logger = loggerFactory.CreateLogger<OwaServiceExample>();
+        var logger = loggerFactory.CreateLogger<OutlookServiceExample>();
 
         try
         {
@@ -32,20 +32,21 @@ public class OwaServiceExample
             var agentConfig = new AgentConfiguration(configuration);
             logger.LogInformation("AgentConfiguration initialized successfully");
 
-            // Initialize OWA service
-            var owaService = new OwaService(agentConfig, logger);
-            logger.LogInformation("OwaService initialized successfully");
+            // Initialize Outlook service
+            var outlookService = new OutlookService(agentConfig, logger);
+            logger.LogInformation("OutlookService initialized successfully");
 
             // Create email request
             var request = new GetEmailRequest
             {
+                StartIndex = 0,
                 NumberOfEmails = 5  // Retrieve 5 oldest emails
             };
 
-            logger.LogInformation("Retrieving {EmailCount} emails from OWA", request.NumberOfEmails);
+            logger.LogInformation("Retrieving {EmailCount} emails from Outlook", request.NumberOfEmails);
 
-            // Retrieve emails
-            var response = await owaService.GetEmail(request);
+            // Retrieve emails (this will prompt for interactive authentication)
+            var response = await outlookService.GetEmail(request);
 
             // Process response
             if (response.Success)
@@ -63,6 +64,9 @@ public class OwaServiceExample
                     
                     if (email.CC.Any())
                         Console.WriteLine($"CC: {string.Join(", ", email.CC)}");
+                    
+                    if (email.BCC.Any())
+                        Console.WriteLine($"BCC: {string.Join(", ", email.BCC)}");
                     
                     Console.WriteLine($"Body Length: {email.Body.Length} characters");
                     Console.WriteLine($"Attachments: {email.Attachments.Count}");
@@ -84,7 +88,7 @@ public class OwaServiceExample
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "An error occurred while running the OWA example");
+            logger.LogError(ex, "An error occurred while running the Outlook example");
             Console.WriteLine($"Exception: {ex.Message}");
         }
     }
