@@ -20,4 +20,4 @@ Console.WriteLine($"server url: {settings.ServerURI}");
 
 var owaAgent = new OwaAgent();
 
-owaAgent.GetEmail(settings);
+await owaAgent.GetEmail(settings);

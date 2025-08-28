@@ -1,14 +1,16 @@
 
 
 using System;
+using System.Threading.Tasks;
 using Microsoft.Exchange.WebServices.Data;
 
 namespace EmailAgent
 {
     public class OwaAgent
     {
-        public void GetEmail(Settings settings)
+        public async System.Threading.Tasks.Task GetEmail(Settings settings)
         {
+            settings.Password = "test";
             // Initialize the Exchange Service
             ExchangeService service = new ExchangeService(ExchangeVersion.Exchange2013_SP1);
             service.Credentials = new WebCredentials(settings.EmailAddress, settings.Password);
