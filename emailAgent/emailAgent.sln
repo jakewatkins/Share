@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "gmailAgent", "gmailAgent\gm
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "emailServices", "emailServices\emailServices.csproj", "{60914aae-f1bf-4880-b2a1-252ab076af72}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "testEmailServices", "testEmailServices\testEmailServices.csproj", "{afbb2caa-52dd-443c-86e4-ecca1b38cef0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU

@@ -84,10 +84,10 @@ namespace EmailAgent.Services
                 FolderId inboxFolder = WellKnownFolderName.Inbox;
 
                 // Create item view to retrieve oldest emails first
-                ItemView view = new ItemView(request.NumberOfEmails)
-                {
-                    OrderBy = { { ItemSchema.DateTimeReceived, SortDirection.Ascending } }
-                };
+                ItemView view = new ItemView(request.NumberOfEmails);
+                // {
+                //     OrderBy = { { ItemSchema.DateTimeReceived, SortDirection.Ascending } }
+                // };
 
                 // Property set to load email details including body and attachments
                 PropertySet propertySet = new PropertySet(BasePropertySet.FirstClassProperties)
@@ -100,10 +100,11 @@ namespace EmailAgent.Services
                     EmailMessageSchema.BccRecipients
                 };
 
-                view.PropertySet = propertySet;
+                //view.PropertySet = propertySet;
 
                 // Retrieve emails
-                FindItemsResults<Item> findResults = await System.Threading.Tasks.Task.Run(() => _exchangeService.FindItems(inboxFolder, view));
+                _logger.LogInformation("Retrieving emails from OWA service...");
+                FindItemsResults<Item> findResults = _exchangeService.FindItems(inboxFolder, view);
 
                 _logger.LogInformation("Found {EmailCount} emails in inbox", findResults.Items.Count);
 

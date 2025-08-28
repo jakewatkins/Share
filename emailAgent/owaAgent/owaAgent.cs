@@ -23,9 +23,12 @@ namespace EmailAgent
 
                 // Define the search filter (optional)
                 ItemView view = new ItemView(10); // Fetch the top 10 emails
+                view.Offset = 0;
+                view.OrderBy.Add(ItemSchema.DateTimeReceived, SortDirection.Descending);
+                view.PropertySet = new PropertySet(BasePropertySet.IdOnly, ItemSchema.Subject, ItemSchema.DateTimeReceived);
 
                 // Retrieve emails
-                FindItemsResults<Item> findResults = service.FindItems(inboxFolder, view);
+                FindItemsResults<Item> findResults = service.FindItems(WellKnownFolderName.Inbox, view);
 
                 Console.WriteLine("Emails retrieved:");
                 foreach (Item item in findResults.Items)
