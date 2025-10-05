@@ -6,6 +6,22 @@
     <Nullable>enable</Nullable>
     <AssemblyName>EmailAgent.emailServices</AssemblyName>
     <RootNamespace>EmailAgent</RootNamespace>
+    
+    <!-- NuGet Package Properties -->
+    <PackageId>EmailAgent.emailServices</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Jake Watkins</Authors>
+    <Company>Jake Watkins</Company>
+    <Product>EmailAgent.emailServices</Product>
+    <Description>A .NET 8.0 shared library providing common entities and services for email processing across multiple email providers including Gmail, Outlook, and OWA.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/jakewatkins/Share</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jakewatkins/Share</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>email;gmail;outlook;owa;csharp;dotnet</PackageTags>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
   <ItemGroup>
