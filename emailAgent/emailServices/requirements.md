@@ -27,6 +27,7 @@
         - use reasonable default settings for all serilog settings
 - Use serilog to log to a file for debugging, just use the filename in the settings.
 - for configuration purposes, we pass the IConfiguration interface to classes
+- if logging errors, always use the error log level
 
 # Requirement 1 - email entities
 - use EmailAgent.Entities as the namespace for entities
@@ -164,3 +165,60 @@
     - if an email has multiple email formats, favor HTML over plain text
     - you can follow my code in ../gmailAgent/gmailAgent.cs method ParseMessagePart starting at line 265 which calls GetMessagePartContent starting at line 300.
 - if there is an error put the error information the the response object
+
+# Requirement 6 - delete OWA email
+- I want a method called DeleteEmail added to OwaService
+- the user will pass in an Email entity to the method and the method will delete it
+- the email signature will look like:
+    public bool DeleteEmail(Email email)
+- the method will delete 1 email at a time.
+- the method will verify that the email entity has a service type of OWA and that the id value is not empty or null
+    - if it is not of service type OWA, log the validation failure (email id and wrong service) and return false
+    - if the id value is null or empty, log the validation failure (missing email id) and return false
+- the method will use the Email entity's id value to call the OWA service's DeleteItems
+- refactor the existing code as necassary to minimize code duplication
+    - for example - move creating the server connection to a private shared method
+    - cache the connection so it can be reused across multiple calls.
+    - the service should implement IDisposable so everything can be cleaned up with the service is destroyed.
+    - if a connection to the server cannot be established thrown an exception
+- if the service returns a ServiceResponseException, log it and throw an exception
+- if the the service response ServiceError is not equal to 0, log the email's id, the ErrorDetails and ErrorMessage and then return false
+- if the the service response ServiceError is equal to 0 return true.
+
+# Requirement 7 - delete Gmail email
+- I want a method called DeleteEmail added to GmailService
+- the user will pass in an Email entity to the method and the method will delete it
+- the email signature will look like:
+    public bool DeleteEmail(Email email)
+- the method will delete 1 email at a time.
+- the method will verify that the email entity has a service type of Gmail and that the id value is not empty or null
+    - if it is not of service type Gmail, log the validation failure (email id and wrong service) and return false
+    - if the id value is null or empty, log the validation failure (missing email id) and return false
+- the method will use the Email entity's id value to call the Gmail service's Messages.Delete method
+- refactor the existing code as necassary to minimize code duplication
+    - for example - move creating the Gmail service connection to a private shared method
+    - cache the Gmail service connection so it can be reused across multiple calls.
+    - the service should implement IDisposable so everything can be cleaned up when the service is destroyed.
+    - if a connection to the Gmail service cannot be established throw an exception
+- if the Gmail service throws a GoogleApiException, log it and throw an exception
+- if the Gmail service delete operation completes successfully return true
+- if the Gmail service returns any other error or exception, log the email's id and the error details and then return false
+
+# Requirement 8 - delete Outlook email
+- I want a method called DeleteEmail added to OutlookService
+- the user will pass in an Email entity to the method and the method will delete it
+- the email signature will look like:
+    public bool DeleteEmail(Email email)
+- the method will delete 1 email at a time.
+- the method will verify that the email entity has a service type of Outlook and that the id value is not empty or null
+    - if it is not of service type Outlook, log the validation failure (email id and wrong service) and return false
+    - if the id value is null or empty, log the validation failure (missing email id) and return false
+- the method will use the Email entity's id value to call the Microsoft Graph API's Messages.Delete method
+- refactor the existing code as necassary to minimize code duplication
+    - for example - move creating the Graph service client to a private shared method
+    - cache the Graph service client so it can be reused across multiple calls.
+    - the service should implement IDisposable so everything can be cleaned up when the service is destroyed.
+    - if a connection to the Microsoft Graph service cannot be established throw an exception
+- if the Microsoft Graph service throws a ServiceException, log it and throw an exception
+- if the Microsoft Graph service delete operation completes successfully return true
+- if the Microsoft Graph service returns any other error or exception, log the email's id and the error details and then return false

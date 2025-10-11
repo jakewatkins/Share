@@ -9,13 +9,14 @@ using System.Text;
 
 namespace EmailAgent.Services
 {
-    public class GmailService
+    public class GmailService : IDisposable
     {
         private readonly AgentConfiguration _configuration;
         private readonly ILogger _logger;
         private Google.Apis.Gmail.v1.GmailService? _gmailService;
         private DateTime _lastApiCall = DateTime.MinValue;
         private const int RATE_LIMIT_DELAY_MS = 100; // Minimum delay between API calls
+        private bool _disposed = false;
 
         public GmailService(AgentConfiguration configuration, ILogger<GmailService> logger)
         {
@@ -33,6 +34,27 @@ namespace EmailAgent.Services
             _logger.LogInformation("Gmail Service initialized for email: {EmailAddress}", _configuration.GoogleCalendarId);
         }
 
+        /// <summary>
+        /// Ensures the Gmail service connection is ready and available
+        /// </summary>
+        /// <returns>The configured Gmail service instance</returns>
+        /// <exception cref="InvalidOperationException">Thrown when service is disposed or connection failed</exception>
+        private async Task<Google.Apis.Gmail.v1.GmailService> EnsureConnection()
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(GmailService));
+
+            if (_gmailService == null)
+            {
+                await InitializeGmailService();
+            }
+
+            if (_gmailService == null)
+                throw new InvalidOperationException("Gmail service connection is not available");
+
+            return _gmailService;
+        }
+
         public async Task<GetEmailResponse> GetEmail(GetEmailRequest request)
         {
             var response = new GetEmailResponse();
@@ -41,21 +63,18 @@ namespace EmailAgent.Services
             {
                 _logger.LogInformation("Starting GetEmail request: NumberOfEmails={NumberOfEmails}", request.NumberOfEmails);
 
-                // Initialize Gmail service if not already done
-                if (_gmailService == null)
-                {
-                    await InitializeGmailService();
-                }
+                // Ensure Gmail service connection is available
+                var gmailService = await EnsureConnection();
 
                 // Get messages from inbox
-                var messages = await GetInboxMessages(request.NumberOfEmails);
+                var messages = await GetInboxMessages(gmailService, request.NumberOfEmails);
 
                 // Convert to Email entities
                 foreach (var message in messages)
                 {
                     try
                     {
-                        var email = await ConvertToEmail(message);
+                        var email = await ConvertToEmail(gmailService, message);
                         response.Emails.Add(email);
                     }
                     catch (Exception ex)
@@ -110,14 +129,14 @@ namespace EmailAgent.Services
             }
         }
 
-        private async Task<List<Message>> GetInboxMessages(int numberOfEmails)
+        private async Task<List<Message>> GetInboxMessages(Google.Apis.Gmail.v1.GmailService gmailService, int numberOfEmails)
         {
             _logger.LogInformation("Getting inbox messages: NumberOfEmails={NumberOfEmails}", numberOfEmails);
 
             var messages = new List<Message>();
             
             // Get message IDs from inbox
-            var request = _gmailService!.Users.Messages.List("me");
+            var request = gmailService.Users.Messages.List("me");
             request.Q = "in:inbox";
             request.MaxResults = numberOfEmails;
             
@@ -138,7 +157,7 @@ namespace EmailAgent.Services
             foreach (var messageId in messageIds)
             {
                 await RateLimitDelay();
-                var messageRequest = _gmailService.Users.Messages.Get("me", messageId.Id);
+                var messageRequest = gmailService.Users.Messages.Get("me", messageId.Id);
                 messageRequest.Format = UsersResource.MessagesResource.GetRequest.FormatEnum.Full;
                 
                 var message = await messageRequest.ExecuteAsync();
@@ -148,7 +167,7 @@ namespace EmailAgent.Services
             return messages;
         }
 
-        private async Task<Email> ConvertToEmail(Message gmailMessage)
+        private async Task<Email> ConvertToEmail(Google.Apis.Gmail.v1.GmailService gmailService, Message gmailMessage)
         {
             var email = new Email
             {
@@ -308,6 +327,34 @@ namespace EmailAgent.Services
                 .Select(addr => addr.Trim())
                 .Where(addr => !string.IsNullOrWhiteSpace(addr))
                 .ToList();
+        }
+
+        /// <summary>
+        /// Releases all resources used by the GmailService
+        /// </summary>
+        public void Dispose()
+        {
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
+        }
+
+        /// <summary>
+        /// Releases the unmanaged resources used by the GmailService and optionally releases the managed resources
+        /// </summary>
+        /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources</param>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    // Dispose managed resources
+                    _gmailService?.Dispose();
+                    _logger.LogDebug("Gmail Service disposed");
+                }
+
+                _disposed = true;
+            }
         }
     }
 }

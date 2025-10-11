@@ -14,12 +14,13 @@ namespace EmailAgent.Services
     /// <summary>
     /// Service for retrieving emails from Microsoft Outlook using Microsoft Graph API
     /// </summary>
-    public class OutlookService
+    public class OutlookService : IDisposable
     {
         private readonly AgentConfiguration _configuration;
         private readonly ILogger _logger;
         private GraphServiceClient _graphClient = null!; // Initialized in constructor via InitializeGraphClient
         private readonly string[] _scopes = { "Mail.Read", "Mail.ReadWrite" };
+        private bool _disposed = false;
 
         /// <summary>
         /// Initializes a new instance of the OutlookService
@@ -56,6 +57,22 @@ namespace EmailAgent.Services
         }
 
         /// <summary>
+        /// Ensures the Graph service client connection is ready and available
+        /// </summary>
+        /// <returns>The configured GraphServiceClient instance</returns>
+        /// <exception cref="InvalidOperationException">Thrown when service is disposed or connection failed</exception>
+        private GraphServiceClient EnsureConnection()
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(OutlookService));
+
+            if (_graphClient == null)
+                throw new InvalidOperationException("Graph service client connection is not available");
+
+            return _graphClient;
+        }
+
+        /// <summary>
         /// Retrieves emails from the Outlook service
         /// </summary>
         /// <param name="request">Request containing email retrieval parameters</param>
@@ -79,8 +96,11 @@ namespace EmailAgent.Services
 
                 _logger.LogInformation("Starting email retrieval for {NumberOfEmails} emails", request.NumberOfEmails);
 
+                // Ensure Graph client connection is available
+                var graphClient = EnsureConnection();
+
                 // Get emails from inbox, ordered by ReceivedDateTime (oldest first)
-                var messages = await _graphClient.Me.MailFolders.Inbox.Messages
+                var messages = await graphClient.Me.MailFolders.Inbox.Messages
                     .Request()
                     .OrderBy("receivedDateTime asc")
                     .Skip(request.StartIndex)
@@ -247,6 +267,35 @@ namespace EmailAgent.Services
             }
 
             return "unknown";
+        }
+
+        /// <summary>
+        /// Releases all resources used by the OutlookService
+        /// </summary>
+        public void Dispose()
+        {
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
+        }
+
+        /// <summary>
+        /// Releases the unmanaged resources used by the OutlookService and optionally releases the managed resources
+        /// </summary>
+        /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources</param>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    // GraphServiceClient doesn't implement IDisposable in this version
+                    // We can clear the reference
+                    _graphClient = null!;
+                    _logger.LogDebug("Outlook Service disposed");
+                }
+
+                _disposed = true;
+            }
         }
     }
 }

@@ -11,11 +11,12 @@ namespace EmailAgent.Services
     /// <summary>
     /// Service for retrieving emails from Microsoft Exchange/OWA using Exchange Web Services
     /// </summary>
-    public class OwaService
+    public class OwaService : IDisposable
     {
         private readonly AgentConfiguration _configuration;
         private readonly ILogger _logger;
         private readonly ExchangeService _exchangeService;
+        private bool _disposed = false;
 
         /// <summary>
         /// Initializes a new instance of the OwaService
@@ -54,6 +55,22 @@ namespace EmailAgent.Services
                 _logger.LogError(ex, "Failed to initialize OWA Service with URI: {ServiceUri}", _configuration.OwaServiceURI);
                 throw new ArgumentException($"Invalid OWA Service URI: {_configuration.OwaServiceURI}", ex);
             }
+        }
+
+        /// <summary>
+        /// Ensures the Exchange service connection is ready and available
+        /// </summary>
+        /// <returns>The configured ExchangeService instance</returns>
+        /// <exception cref="InvalidOperationException">Thrown when service is disposed or connection failed</exception>
+        private ExchangeService EnsureConnection()
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(OwaService));
+
+            if (_exchangeService == null)
+                throw new InvalidOperationException("Exchange service connection is not available");
+
+            return _exchangeService;
         }
 
         /// <summary>
@@ -102,9 +119,12 @@ namespace EmailAgent.Services
 
                 //view.PropertySet = propertySet;
 
+                // Ensure connection is available
+                var exchangeService = EnsureConnection();
+
                 // Retrieve emails
                 _logger.LogInformation("Retrieving emails from OWA service...");
-                FindItemsResults<Item> findResults = _exchangeService.FindItems(inboxFolder, view);
+                FindItemsResults<Item> findResults = exchangeService.FindItems(inboxFolder, view);
 
                 _logger.LogInformation("Found {EmailCount} emails in inbox", findResults.Items.Count);
 
@@ -261,6 +281,37 @@ namespace EmailAgent.Services
             }
 
             return "unknown";
+        }
+
+        /// <summary>
+        /// Releases all resources used by the OwaService
+        /// </summary>
+        public void Dispose()
+        {
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
+        }
+
+        /// <summary>
+        /// Releases the unmanaged resources used by the OwaService and optionally releases the managed resources
+        /// </summary>
+        /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources</param>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    // ExchangeService doesn't implement IDisposable, but we can clear credentials
+                    if (_exchangeService != null)
+                    {
+                        _exchangeService.Credentials = null;
+                        _logger.LogDebug("OWA Service disposed and credentials cleared");
+                    }
+                }
+
+                _disposed = true;
+            }
         }
     }
 }
