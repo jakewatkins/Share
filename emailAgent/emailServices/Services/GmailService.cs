@@ -96,6 +96,68 @@ namespace EmailAgent.Services
             return response;
         }
 
+        /// <summary>
+        /// Deletes an email from the Gmail service
+        /// </summary>
+        /// <param name="email">Email entity containing the ID of the email to delete</param>
+        /// <returns>True if email was successfully deleted, false otherwise</returns>
+        /// <exception cref="ArgumentNullException">Thrown when email parameter is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when connection cannot be established</exception>
+        /// <exception cref="GoogleApiException">Thrown when Gmail service returns an error</exception>
+        public async Task<bool> DeleteEmail(Email email)
+        {
+            if (email == null)
+            {
+                _logger.LogError("DeleteEmail called with null email parameter");
+                throw new ArgumentNullException(nameof(email), "Email parameter cannot be null");
+            }
+
+            // Validate that the email entity has a service type of Gmail
+            if (email.Service != EmailService.Gmail)
+            {
+                _logger.LogWarning("Validation failure: Email ID {EmailId} has wrong service type {ServiceType}, expected Gmail", 
+                    email.Id, email.Service);
+                return false;
+            }
+
+            // Validate that the id value is not null or empty
+            if (string.IsNullOrEmpty(email.Id))
+            {
+                _logger.LogWarning("Validation failure: Missing email ID for Gmail delete operation");
+                return false;
+            }
+
+            try
+            {
+                // Ensure Gmail service connection is available
+                var gmailService = await EnsureConnection();
+
+                _logger.LogInformation("Attempting to delete email with ID: {EmailId}", email.Id);
+
+                // Use the Email entity's id value to call the Gmail service's Messages.Delete method
+                await RateLimitDelay();
+                var deleteRequest = gmailService.Users.Messages.Delete("me", email.Id);
+                await deleteRequest.ExecuteAsync();
+
+                // If the Gmail service delete operation completes successfully return true
+                _logger.LogInformation("Successfully deleted email with ID: {EmailId}", email.Id);
+                return true;
+            }
+            catch (Google.GoogleApiException ex)
+            {
+                // If the Gmail service throws a GoogleApiException, log it and throw an exception
+                _logger.LogError(ex, "GoogleApiException occurred while deleting email ID: {EmailId}", email.Id);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // If the Gmail service returns any other error or exception, log the email's id and the error details and then return false
+                _logger.LogWarning(ex, "Failed to delete email ID {EmailId}. Error details: {ErrorMessage}", 
+                    email.Id, ex.Message);
+                return false;
+            }
+        }
+
         private async Task InitializeGmailService()
         {
             try

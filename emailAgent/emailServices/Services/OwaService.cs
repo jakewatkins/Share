@@ -173,6 +173,90 @@ namespace EmailAgent.Services
         }
 
         /// <summary>
+        /// Deletes an email from the OWA service
+        /// </summary>
+        /// <param name="email">Email entity containing the ID of the email to delete</param>
+        /// <returns>True if email was successfully deleted, false otherwise</returns>
+        /// <exception cref="ArgumentNullException">Thrown when email parameter is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown when connection cannot be established</exception>
+        /// <exception cref="ServiceResponseException">Thrown when OWA service returns an error</exception>
+        public bool DeleteEmail(Email email)
+        {
+            if (email == null)
+            {
+                _logger.LogError("DeleteEmail called with null email parameter");
+                throw new ArgumentNullException(nameof(email), "Email parameter cannot be null");
+            }
+
+            // Validate that the email entity has a service type of OWA
+            if (email.Service != EmailService.OWA)
+            {
+                _logger.LogWarning("Validation failure: Email ID {EmailId} has wrong service type {ServiceType}, expected OWA", 
+                    email.Id, email.Service);
+                return false;
+            }
+
+            // Validate that the id value is not null or empty
+            if (string.IsNullOrEmpty(email.Id))
+            {
+                _logger.LogWarning("Validation failure: Missing email ID for OWA delete operation");
+                return false;
+            }
+
+            try
+            {
+                // Ensure connection is available
+                var exchangeService = EnsureConnection();
+
+                _logger.LogInformation("Attempting to delete email with ID: {EmailId}", email.Id);
+
+                // Use the Email entity's id value to call the OWA service's DeleteItems
+                var itemId = new ItemId(email.Id);
+                var response = exchangeService.DeleteItems(
+                    new[] { itemId }, 
+                    DeleteMode.MoveToDeletedItems, 
+                    SendCancellationsMode.SendToNone, 
+                    AffectedTaskOccurrence.AllOccurrences);
+
+                // Check the service response
+                if (response?.Count > 0)
+                {
+                    var deleteResponse = response[0];
+                    
+                    // If the service response ServiceError is equal to 0 return true
+                    if (deleteResponse.Result == ServiceResult.Success)
+                    {
+                        _logger.LogInformation("Successfully deleted email with ID: {EmailId}", email.Id);
+                        return true;
+                    }
+                    else
+                    {
+                        // If the service response ServiceError is not equal to 0, log details and return false
+                        _logger.LogWarning("Failed to delete email ID {EmailId}. Error: {ErrorCode}, Details: {ErrorDetails}, Message: {ErrorMessage}", 
+                            email.Id, deleteResponse.Result, deleteResponse.ErrorDetails, deleteResponse.ErrorMessage);
+                        return false;
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("No response received when deleting email ID: {EmailId}", email.Id);
+                    return false;
+                }
+            }
+            catch (ServiceResponseException ex)
+            {
+                // If the service returns a ServiceResponseException, log it and throw an exception
+                _logger.LogError(ex, "ServiceResponseException occurred while deleting email ID: {EmailId}", email.Id);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error occurred while deleting email ID: {EmailId}", email.Id);
+                throw new InvalidOperationException($"Failed to delete email with ID {email.Id}", ex);
+            }
+        }
+
+        /// <summary>
         /// Maps an Exchange EmailMessage to the unified Email entity
         /// </summary>
         /// <param name="emailMessage">Exchange email message</param>
