@@ -73,6 +73,39 @@ namespace EmailAgent.Services
         }
 
         /// <summary>
+        /// Gets the appropriate Microsoft Graph folder path for an EmailFolder
+        /// </summary>
+        /// <param name="folder">The email folder to convert</param>
+        /// <returns>The folder path string for Microsoft Graph API</returns>
+        /// <exception cref="ArgumentNullException">Thrown when folder is null</exception>
+        /// <exception cref="ArgumentException">Thrown when folder type is not supported</exception>
+        private string GetGraphFolderPath(EmailFolder folder)
+        {
+            if (folder == null)
+                throw new ArgumentNullException(nameof(folder));
+
+            // If ServiceSpecificId is provided, use it directly as the folder path
+            if (!string.IsNullOrEmpty(folder.ServiceSpecificId))
+            {
+                return folder.ServiceSpecificId;
+            }
+
+            // Fall back to mapping based on FolderType
+            return folder.FolderType switch
+            {
+                FolderType.Inbox => "Inbox",
+                FolderType.Sent => "SentItems",
+                FolderType.Drafts => "Drafts",
+                FolderType.Spam => "JunkEmail",
+                FolderType.Trash => "DeletedItems",
+                FolderType.Custom => string.IsNullOrEmpty(folder.ServiceSpecificId)
+                    ? throw new ArgumentException($"Custom folder '{folder.FolderName}' requires ServiceSpecificId")
+                    : folder.ServiceSpecificId,
+                _ => throw new ArgumentException($"Unsupported folder type: {folder.FolderType}")
+            };
+        }
+
+        /// <summary>
         /// Retrieves emails from the Outlook service
         /// </summary>
         /// <param name="request">Request containing email retrieval parameters</param>
@@ -96,11 +129,19 @@ namespace EmailAgent.Services
 
                 _logger.LogInformation("Starting email retrieval for {NumberOfEmails} emails", request.NumberOfEmails);
 
+                // Get the effective folder (defaults to Inbox if no folder specified)
+                var targetFolder = request.GetEffectiveFolder(EmailService.Outlook);
+                _logger.LogDebug("Retrieving emails from folder: {FolderName} ({FolderType})", 
+                    targetFolder.FolderName, targetFolder.FolderType);
+
                 // Ensure Graph client connection is available
                 var graphClient = EnsureConnection();
 
-                // Get emails from inbox, ordered by ReceivedDateTime (oldest first)
-                var messages = await graphClient.Me.MailFolders.Inbox.Messages
+                // Get the folder path for Microsoft Graph
+                var folderPath = GetGraphFolderPath(targetFolder);
+
+                // Get emails from the specified folder, ordered by ReceivedDateTime (oldest first)
+                var messages = await graphClient.Me.MailFolders[folderPath].Messages
                     .Request()
                     .OrderBy("receivedDateTime asc")
                     .Skip(request.StartIndex)
@@ -108,7 +149,7 @@ namespace EmailAgent.Services
                     .Expand("attachments")
                     .GetAsync();
 
-                _logger.LogInformation("Found {EmailCount} emails in inbox", messages.Count);
+                _logger.LogInformation("Found {EmailCount} emails in folder {FolderName}", messages.Count, targetFolder.FolderName);
 
                 int processedCount = 0;
 

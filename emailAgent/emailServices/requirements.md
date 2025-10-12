@@ -222,3 +222,75 @@
 - if the Microsoft Graph service throws a ServiceException, log it and throw an exception
 - if the Microsoft Graph service delete operation completes successfully return true
 - if the Microsoft Graph service returns any other error or exception, log the email's id and the error details and then return false
+
+# Requirement 9 - Refactor email retrieval for folder and SPAM support
+- This requirement prepares the email services for upcoming requirements to retrieve emails from specific folders and SPAM folders
+- The current GetEmail methods are hardcoded to retrieve emails from the Inbox folder only
+- We need to refactor the code to make folder selection flexible and reusable
+
+## 9.1 - Create EmailFolder entity
+- Create a new entity called EmailFolder in the EmailAgent.Entities namespace
+- Properties should include:
+    - FolderName (string) - Display name of the folder
+    - FolderType (enum) - Inbox, Sent, Drafts, Spam, Trash, Custom
+    - ServiceSpecificId (string) - Service-specific folder identifier (e.g., Gmail label, Outlook folder ID)
+    - Service (EmailService) - Which service this folder belongs to
+
+## 9.2 - Update GetEmailRequest entity
+- Add an optional EmailFolder property to GetEmailRequest
+- If EmailFolder is null or not provided, default to Inbox behavior (maintains backward compatibility)
+- Add validation to ensure the EmailFolder.Service matches the service being called
+
+## 9.3 - Refactor OwaService for folder support
+- Extract folder-specific logic from GetEmail method into a private method: GetEmailsFromFolder(EmailFolder folder, GetEmailRequest request)
+- Create a private method: ResolveFolderIdFromEmailFolder(EmailFolder emailFolder) that maps EmailFolder to EWS FolderId
+- Support common folder types: Inbox, Sent, Drafts, Spam (Junk Email), Trash (Deleted Items)
+- For custom folders, use the ServiceSpecificId as the folder path/name
+- Update GetEmail method to call GetEmailsFromFolder with Inbox as default folder
+- Ensure the refactored code reuses existing connection management and email mapping logic
+
+## 9.4 - Refactor GmailService for folder support  
+- Extract folder-specific logic from GetEmail method into a private method: GetEmailsFromFolder(EmailFolder folder, GetEmailRequest request)
+- Create a private method: ResolveGmailQueryFromEmailFolder(EmailFolder emailFolder) that maps EmailFolder to Gmail search query
+- Support common folder types using Gmail labels/queries:
+    - Inbox: "in:inbox"
+    - Sent: "in:sent" 
+    - Drafts: "in:drafts"
+    - Spam: "in:spam"
+    - Trash: "in:trash"
+    - Custom: use ServiceSpecificId as Gmail label name
+- Update GetInboxMessages method name to GetMessagesFromFolder and accept folder parameter
+- Update GetEmail method to call GetEmailsFromFolder with Inbox as default folder
+- Ensure the refactored code reuses existing connection management, rate limiting, and email mapping logic
+
+## 9.5 - Refactor OutlookService for folder support
+- Extract folder-specific logic from GetEmail method into a private method: GetEmailsFromFolder(EmailFolder folder, GetEmailRequest request)
+- Create a private method: ResolveGraphFolderFromEmailFolder(EmailFolder emailFolder) that maps EmailFolder to Microsoft Graph folder path
+- Support common folder types using Graph API folder paths:
+    - Inbox: "Inbox"
+    - Sent: "SentItems"
+    - Drafts: "Drafts"  
+    - Spam: "JunkEmail"
+    - Trash: "DeletedItems"
+    - Custom: use ServiceSpecificId as folder name/ID
+- Update GetEmail method to call GetEmailsFromFolder with Inbox as default folder
+- Ensure the refactored code reuses existing connection management and email mapping logic
+
+## 9.6 - Maintain backward compatibility
+- All existing GetEmail method signatures must remain unchanged
+- All existing functionality must continue to work exactly as before
+- Default behavior (when no folder specified) should retrieve from Inbox
+- No breaking changes to existing entities or interfaces
+
+## 9.7 - Error handling and logging
+- Add appropriate error handling for invalid or non-existent folders
+- Log folder resolution and email retrieval operations
+- Provide clear error messages when folders cannot be found or accessed
+- Handle service-specific folder permission issues
+
+## 9.8 - Testing requirements
+- Verify all existing GetEmail tests still pass
+- Test folder resolution for each service
+- Test error handling for invalid folders
+- Verify backward compatibility is maintained
+

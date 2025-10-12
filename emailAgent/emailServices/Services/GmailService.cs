@@ -55,6 +55,39 @@ namespace EmailAgent.Services
             return _gmailService;
         }
 
+        /// <summary>
+        /// Converts an EmailFolder to the appropriate Gmail query string
+        /// </summary>
+        /// <param name="folder">The email folder to convert</param>
+        /// <returns>Gmail query string appropriate for the folder</returns>
+        /// <exception cref="ArgumentNullException">Thrown when folder is null</exception>
+        /// <exception cref="ArgumentException">Thrown when folder type is not supported</exception>
+        private string GetGmailQueryFromEmailFolder(EmailFolder folder)
+        {
+            if (folder == null)
+                throw new ArgumentNullException(nameof(folder));
+
+            // If ServiceSpecificId is provided, use it directly as the query
+            if (!string.IsNullOrEmpty(folder.ServiceSpecificId))
+            {
+                return $"in:{folder.ServiceSpecificId}";
+            }
+
+            // Fall back to mapping based on FolderType
+            return folder.FolderType switch
+            {
+                FolderType.Inbox => "in:inbox",
+                FolderType.Sent => "in:sent",
+                FolderType.Drafts => "in:draft",
+                FolderType.Spam => "in:spam",
+                FolderType.Trash => "in:trash",
+                FolderType.Custom => string.IsNullOrEmpty(folder.ServiceSpecificId)
+                    ? throw new ArgumentException($"Custom folder '{folder.FolderName}' requires ServiceSpecificId")
+                    : $"in:{folder.ServiceSpecificId}",
+                _ => throw new ArgumentException($"Unsupported folder type: {folder.FolderType}")
+            };
+        }
+
         public async Task<GetEmailResponse> GetEmail(GetEmailRequest request)
         {
             var response = new GetEmailResponse();
@@ -63,11 +96,16 @@ namespace EmailAgent.Services
             {
                 _logger.LogInformation("Starting GetEmail request: NumberOfEmails={NumberOfEmails}", request.NumberOfEmails);
 
+                // Get the effective folder (defaults to Inbox if no folder specified)
+                var targetFolder = request.GetEffectiveFolder(EmailService.Gmail);
+                _logger.LogDebug("Retrieving emails from folder: {FolderName} ({FolderType})", 
+                    targetFolder.FolderName, targetFolder.FolderType);
+
                 // Ensure Gmail service connection is available
                 var gmailService = await EnsureConnection();
 
-                // Get messages from inbox
-                var messages = await GetInboxMessages(gmailService, request.NumberOfEmails);
+                // Get messages from the specified folder
+                var messages = await GetFolderMessages(gmailService, targetFolder, request.NumberOfEmails);
 
                 // Convert to Email entities
                 foreach (var message in messages)
@@ -191,15 +229,20 @@ namespace EmailAgent.Services
             }
         }
 
-        private async Task<List<Message>> GetInboxMessages(Google.Apis.Gmail.v1.GmailService gmailService, int numberOfEmails)
+        private async Task<List<Message>> GetFolderMessages(Google.Apis.Gmail.v1.GmailService gmailService, EmailFolder folder, int numberOfEmails)
         {
-            _logger.LogInformation("Getting inbox messages: NumberOfEmails={NumberOfEmails}", numberOfEmails);
+            _logger.LogInformation("Getting messages from folder {FolderName}: NumberOfEmails={NumberOfEmails}", 
+                folder.FolderName, numberOfEmails);
 
             var messages = new List<Message>();
             
-            // Get message IDs from inbox
+            // Get Gmail query string for the folder
+            var queryString = GetGmailQueryFromEmailFolder(folder);
+            _logger.LogDebug("Using Gmail query: {Query}", queryString);
+            
+            // Get message IDs from the specified folder
             var request = gmailService.Users.Messages.List("me");
-            request.Q = "in:inbox";
+            request.Q = queryString;
             request.MaxResults = numberOfEmails;
             
             await RateLimitDelay();
@@ -207,11 +250,11 @@ namespace EmailAgent.Services
             
             if (response.Messages == null || response.Messages.Count == 0)
             {
-                _logger.LogInformation("No messages found in inbox");
+                _logger.LogInformation("No messages found in folder {FolderName}", folder.FolderName);
                 return messages;
             }
 
-            _logger.LogInformation("Found {MessageCount} messages in inbox", response.Messages.Count);
+            _logger.LogInformation("Found {MessageCount} messages in folder {FolderName}", response.Messages.Count, folder.FolderName);
 
             // Get full message details for each message (retrieve oldest first)
             var messageIds = response.Messages.OrderBy(m => m.Id).Take(numberOfEmails).ToList();

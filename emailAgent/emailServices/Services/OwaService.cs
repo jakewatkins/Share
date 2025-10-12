@@ -74,6 +74,44 @@ namespace EmailAgent.Services
         }
 
         /// <summary>
+        /// Converts an EmailFolder to the appropriate FolderId for EWS
+        /// </summary>
+        /// <param name="folder">The email folder to convert</param>
+        /// <returns>FolderId appropriate for EWS operations</returns>
+        /// <exception cref="ArgumentNullException">Thrown when folder is null</exception>
+        /// <exception cref="ArgumentException">Thrown when folder type is not supported</exception>
+        private FolderId GetFolderIdFromEmailFolder(EmailFolder folder)
+        {
+            if (folder == null)
+                throw new ArgumentNullException(nameof(folder));
+
+            // If ServiceSpecificId is provided and contains a WellKnownFolderName reference, use it
+            if (!string.IsNullOrEmpty(folder.ServiceSpecificId) && 
+                folder.ServiceSpecificId.StartsWith("WellKnownFolderName."))
+            {
+                var folderName = folder.ServiceSpecificId.Replace("WellKnownFolderName.", "");
+                if (Enum.TryParse<WellKnownFolderName>(folderName, true, out var wellKnownFolder))
+                {
+                    return new FolderId(wellKnownFolder);
+                }
+            }
+
+            // Fall back to mapping based on FolderType
+            return folder.FolderType switch
+            {
+                FolderType.Inbox => new FolderId(WellKnownFolderName.Inbox),
+                FolderType.Sent => new FolderId(WellKnownFolderName.SentItems),
+                FolderType.Drafts => new FolderId(WellKnownFolderName.Drafts),
+                FolderType.Spam => new FolderId(WellKnownFolderName.JunkEmail),
+                FolderType.Trash => new FolderId(WellKnownFolderName.DeletedItems),
+                FolderType.Custom => string.IsNullOrEmpty(folder.ServiceSpecificId) 
+                    ? throw new ArgumentException($"Custom folder '{folder.FolderName}' requires ServiceSpecificId")
+                    : new FolderId(folder.ServiceSpecificId),
+                _ => throw new ArgumentException($"Unsupported folder type: {folder.FolderType}")
+            };
+        }
+
+        /// <summary>
         /// Retrieves emails from the OWA service
         /// </summary>
         /// <param name="request">Request containing email retrieval parameters</param>
@@ -97,8 +135,13 @@ namespace EmailAgent.Services
 
                 _logger.LogInformation("Starting email retrieval for {NumberOfEmails} emails", request.NumberOfEmails);
 
-                // Define the folder to search (Inbox)
-                FolderId inboxFolder = WellKnownFolderName.Inbox;
+                // Get the effective folder (defaults to Inbox if no folder specified)
+                var targetFolder = request.GetEffectiveFolder(EmailService.OWA);
+                _logger.LogDebug("Retrieving emails from folder: {FolderName} ({FolderType})", 
+                    targetFolder.FolderName, targetFolder.FolderType);
+
+                // Convert EmailFolder to FolderId
+                FolderId folderId = GetFolderIdFromEmailFolder(targetFolder);
 
                 // Create item view to retrieve oldest emails first
                 ItemView view = new ItemView(request.NumberOfEmails);
@@ -124,9 +167,9 @@ namespace EmailAgent.Services
 
                 // Retrieve emails
                 _logger.LogInformation("Retrieving emails from OWA service...");
-                FindItemsResults<Item> findResults = exchangeService.FindItems(inboxFolder, view);
+                FindItemsResults<Item> findResults = exchangeService.FindItems(folderId, view);
 
-                _logger.LogInformation("Found {EmailCount} emails in inbox", findResults.Items.Count);
+                _logger.LogInformation("Found {EmailCount} emails in {FolderName}", findResults.Items.Count, targetFolder.FolderName);
 
                 // Process each email
                 foreach (Item item in findResults.Items)

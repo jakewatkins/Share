@@ -9,11 +9,11 @@
     
     <!-- NuGet Package Properties -->
     <PackageId>EmailAgent.emailServices</PackageId>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Authors>Jake Watkins</Authors>
     <Company>Jake Watkins</Company>
     <Product>EmailAgent.emailServices</Product>
-    <Description>A .NET 8.0 shared library providing common entities and services for email processing across multiple email providers including Gmail, Outlook, and OWA.</Description>
+    <Description>A .NET 8.0 shared library providing common entities and services for email processing across multiple email providers including Gmail, Outlook, and OWA. Features include folder-based email retrieval, SPAM support, and backward-compatible API design.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/jakewatkins/Share</PackageProjectUrl>
     <RepositoryUrl>https://github.com/jakewatkins/Share</RepositoryUrl>
