@@ -9,9 +9,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "owaAgent", "owaAgent\owaAge
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "gmailAgent", "gmailAgent\gmailAgent.csproj", "{75CEBE77-9578-4EFF-A4D9-E38C196F393C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "emailServices", "emailServices\emailServices.csproj", "{60914aae-f1bf-4880-b2a1-252ab076af72}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "emailServices", "emailServices\emailServices.csproj", "{60914AAE-F1BF-4880-B2A1-252AB076AF72}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "testEmailServices", "testEmailServices\testEmailServices.csproj", "{afbb2caa-52dd-443c-86e4-ecca1b38cef0}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "testEmailServices", "testEmailServices\testEmailServices.csproj", "{AFBB2CAA-52DD-443C-86E4-ECCA1B38CEF0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "emailServices.Tests", "emailServices.Tests\emailServices.Tests.csproj", "{7A0C0B5D-5A16-45A0-83C8-1665F75331BC}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -59,6 +61,18 @@ Global
 		{75CEBE77-9578-4EFF-A4D9-E38C196F393C}.Release|x64.Build.0 = Release|Any CPU
 		{75CEBE77-9578-4EFF-A4D9-E38C196F393C}.Release|x86.ActiveCfg = Release|Any CPU
 		{75CEBE77-9578-4EFF-A4D9-E38C196F393C}.Release|x86.Build.0 = Release|Any CPU
+		{7A0C0B5D-5A16-45A0-83C8-1665F75331BC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7A0C0B5D-5A16-45A0-83C8-1665F75331BC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7A0C0B5D-5A16-45A0-83C8-1665F75331BC}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7A0C0B5D-5A16-45A0-83C8-1665F75331BC}.Debug|x64.Build.0 = Debug|Any CPU
+		{7A0C0B5D-5A16-45A0-83C8-1665F75331BC}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{7A0C0B5D-5A16-45A0-83C8-1665F75331BC}.Debug|x86.Build.0 = Debug|Any CPU
+		{7A0C0B5D-5A16-45A0-83C8-1665F75331BC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7A0C0B5D-5A16-45A0-83C8-1665F75331BC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7A0C0B5D-5A16-45A0-83C8-1665F75331BC}.Release|x64.ActiveCfg = Release|Any CPU
+		{7A0C0B5D-5A16-45A0-83C8-1665F75331BC}.Release|x64.Build.0 = Release|Any CPU
+		{7A0C0B5D-5A16-45A0-83C8-1665F75331BC}.Release|x86.ActiveCfg = Release|Any CPU
+		{7A0C0B5D-5A16-45A0-83C8-1665F75331BC}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

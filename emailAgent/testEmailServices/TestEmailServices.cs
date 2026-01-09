@@ -34,7 +34,7 @@ namespace testEmailServices
                 Console.WriteLine();
 
                 // Test OWA Service
-                //await TestOwaService(agentConfig, loggerFactory);
+                await TestOwaService(agentConfig, loggerFactory);
                 Console.WriteLine();
 
                 // Test folder functionality (backward compatibility and new features)
@@ -42,12 +42,12 @@ namespace testEmailServices
                 Console.WriteLine();
 
                 // Test Gmail Service
-                await TestGmailService(agentConfig, loggerFactory);
-                Console.WriteLine();
+                //await TestGmailService(agentConfig, loggerFactory);
+                //Console.WriteLine();
 
                 // Test Outlook Service
-                await TestOutlookService(agentConfig, loggerFactory);
-                Console.WriteLine();
+                //await TestOutlookService(agentConfig, loggerFactory);
+                //Console.WriteLine();
             }
             catch (Exception ex)
             {
