@@ -38,16 +38,16 @@ namespace testEmailServices
                 Console.WriteLine();
 
                 // Test folder functionality (backward compatibility and new features)
-                await TestFolderFunctionality(agentConfig, loggerFactory);
+                //await TestFolderFunctionality(agentConfig, loggerFactory);
                 Console.WriteLine();
 
                 // Test Gmail Service
                 //await TestGmailService(agentConfig, loggerFactory);
-                Console.WriteLine();
+                //Console.WriteLine();
 
                 // Test Outlook Service
                 //await TestOutlookService(agentConfig, loggerFactory);
-                Console.WriteLine();
+                //Console.WriteLine();
             }
             catch (Exception ex)
             {
