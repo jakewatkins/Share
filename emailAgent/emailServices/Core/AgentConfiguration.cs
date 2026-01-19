@@ -12,19 +12,19 @@ namespace EmailAgent.Core
     public class AgentConfiguration
     {
         // Key Vault secrets - loaded during construction
-        public string OwaServiceURI { get; private set; } = string.Empty;
-        public string OwaPassword { get; private set; } = string.Empty;
-        public string OwaEmailAddress { get; private set; } = string.Empty;
-        public string GoogleCalendarId { get; private set; } = string.Empty;
-        public string GoogleClientId { get; private set; } = string.Empty;
-        public string GoogleClientSecret { get; private set; } = string.Empty;
-        public string OutlookClientId { get; private set; } = string.Empty;
-        public string OutlookSecret { get; private set; } = string.Empty;
+        public string OwaServiceURI { get; set; } = string.Empty;
+        public string OwaPassword { get; set; } = string.Empty;
+        public string OwaEmailAddress { get; set; } = string.Empty;
+        public string GoogleCalendarId { get; set; } = string.Empty;
+        public string GoogleClientId { get; set; } = string.Empty;
+        public string GoogleClientSecret { get; set; } = string.Empty;
+        public string OutlookClientId { get; set; } = string.Empty;
+        public string OutlookSecret { get; set; } = string.Empty;
 
         // General configuration - loaded from settings.json
-        public string KeyvaultName { get; private set; } = string.Empty;
-        public int RetrievalCount { get; private set; }
-        public int MaxAttachmentSize { get; private set; }
+        public string KeyvaultName { get; set; } = string.Empty;
+        public int RetrievalCount { get; set; }
+        public int MaxAttachmentSize { get; set; }
 
         /// <summary>
         /// Initializes a new instance of AgentConfiguration.
