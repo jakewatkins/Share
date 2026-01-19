@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    restart: unless-stopped
+    command:
+      # Enable Docker provider
+      - --providers.docker=true
+      - --providers.docker.network=lab-network
+      - --providers.docker.exposedbydefault=false
+      
+      # Configure entrypoints
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      
+      # Redirect HTTP to HTTPS
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      
+      # Enable API and dashboard
+      - --api.dashboard=true
+      - --api.insecure=false
+      
+      # Configure TLS for self-signed certificates
+      - --entrypoints.websecure.http.tls=true
+      
+      # Enable access logs
+      - --accesslog=true
+      - --log.level=INFO
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik-data:/data
+      - ./certs:/certs
+    networks:
+      - lab-network
+    labels:
+      # Enable Traefik for this service
+      - traefik.enable=true
+      
+      # Dashboard route
+      - traefik.http.routers.traefik.rule=Host(`traefik.${HOSTNAME:-localhost}`)
+      - traefik.http.routers.traefik.entrypoints=websecure
+      - traefik.http.routers.traefik.tls=true
+      - traefik.http.routers.traefik.service=api@internal
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    environment:
+      # Basic N8N configuration
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=changeme123
+      
+      # Webhook and external URL configuration
+      - WEBHOOK_URL=https://n8n.${HOSTNAME:-localhost}/
+      - N8N_PROTOCOL=https
+      - N8N_HOST=n8n.${HOSTNAME:-localhost}
+      - N8N_PORT=5678
+      - N8N_LISTEN_ADDRESS=0.0.0.0
+      
+      # Database (using SQLite for simplicity)
+      - DB_TYPE=sqlite
+      - DB_SQLITE_DATABASE=/home/node/.n8n/database.sqlite
+      
+      # Security
+      - N8N_SECURE_COOKIE=true
+      - NODE_ENV=production
+      
+      # Logging
+      - N8N_LOG_LEVEL=info
+      - N8N_LOG_OUTPUT=console,file
+      - N8N_LOG_FILE_LOCATION=/home/node/.n8n/logs/
+      
+      # Timezone
+      - GENERIC_TIMEZONE=America/New_York
+      - TZ=America/New_York
+    volumes:
+      - ./n8n-data:/home/node/.n8n/data
+      - ./n8n-logs:/home/node/.n8n/logs
+    networks:
+      - lab-network
+    depends_on:
+      - traefik
+    labels:
+      # Enable Traefik for this service
+      - traefik.enable=true
+      
+      # HTTP to HTTPS redirect
+      - traefik.http.middlewares.n8n-redirect.redirectscheme.scheme=https
+      - traefik.http.routers.n8n-http.rule=Host(`n8n.${HOSTNAME:-localhost}`)
+      - traefik.http.routers.n8n-http.entrypoints=web
+      - traefik.http.routers.n8n-http.middlewares=n8n-redirect
+      
+      # HTTPS route
+      - traefik.http.routers.n8n.rule=Host(`n8n.${HOSTNAME:-localhost}`)
+      - traefik.http.routers.n8n.entrypoints=websecure
+      - traefik.http.routers.n8n.tls=true
+      - traefik.http.services.n8n.loadbalancer.server.port=5678
+
+networks:
+  lab-network:
+    name: lab-network
+    driver: bridge
+
+volumes:
+  traefik-data:
+    driver: local
+  n8n-data:
+    driver: local
+  n8n-logs:
+    driver: local
