@@ -15,7 +15,7 @@ namespace EmailAgent.Core
         public string OwaServiceURI { get; set; } = string.Empty;
         public string OwaPassword { get; set; } = string.Empty;
         public string OwaEmailAddress { get; set; } = string.Empty;
-        public string GoogleCalendarId { get; set; } = string.Empty;
+        public string GoogleId { get; set; } = string.Empty;
         public string GoogleClientId { get; set; } = string.Empty;
         public string GoogleClientSecret { get; set; } = string.Empty;
         public string OutlookClientId { get; set; } = string.Empty;
@@ -88,7 +88,7 @@ namespace EmailAgent.Core
                 OwaServiceURI = GetSecretValue(client, "owaServiceURI");
                 OwaPassword = GetSecretValue(client, "owaPassword");
                 OwaEmailAddress = GetSecretValue(client, "owaEmailAddress");
-                GoogleCalendarId = GetSecretValue(client, "googleCalendarId");
+                GoogleId = GetSecretValue(client, "googleCalendarId");
                 GoogleClientId = GetSecretValue(client, "googleClientId");
                 GoogleClientSecret = GetSecretValue(client, "googleClientSecret");
                 OutlookClientId = GetSecretValue(client, "outlookClientId");

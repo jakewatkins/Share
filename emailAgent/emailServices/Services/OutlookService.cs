@@ -2,15 +2,67 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
 using Microsoft.Graph;
-using Microsoft.Graph.Auth;
+using Microsoft.Graph.Models;
 using Microsoft.Identity.Client;
+using Microsoft.Kiota.Abstractions;
+using Microsoft.Kiota.Abstractions.Authentication;
 using Microsoft.Extensions.Logging;
 using EmailAgent.Core;
 using EmailAgent.Entities;
 
 namespace EmailAgent.Services
 {
+    /// <summary>
+    /// Custom authentication provider that integrates MSAL with Microsoft Graph v5
+    /// </summary>
+    public class MSALAuthenticationProvider : IAuthenticationProvider
+    {
+        private readonly IPublicClientApplication _clientApp;
+        private readonly string[] _scopes;
+        private readonly ILogger _logger;
+
+        public MSALAuthenticationProvider(IPublicClientApplication clientApp, string[] scopes, ILogger logger)
+        {
+            _clientApp = clientApp ?? throw new ArgumentNullException(nameof(clientApp));
+            _scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+
+        public async Task AuthenticateRequestAsync(RequestInformation request, Dictionary<string, object>? additionalAuthenticationContext = null, CancellationToken cancellationToken = default)
+        {
+            var token = await GetAccessTokenAsync();
+            request.Headers.Add("Authorization", $"Bearer {token}");
+        }
+
+        private async Task<string> GetAccessTokenAsync()
+        {
+            try
+            {
+                // Try to get token silently first
+                var accounts = await _clientApp.GetAccountsAsync();
+                if (accounts.Any())
+                {
+                    var result = await _clientApp.AcquireTokenSilent(_scopes, accounts.FirstOrDefault())
+                        .ExecuteAsync();
+                    return result.AccessToken;
+                }
+            }
+            catch (MsalUiRequiredException)
+            {
+                _logger.LogDebug("Silent token acquisition failed, requiring interactive authentication");
+            }
+
+            // Acquire token interactively
+            var interactiveResult = await _clientApp.AcquireTokenInteractive(_scopes)
+                .WithPrompt(Microsoft.Identity.Client.Prompt.SelectAccount)
+                .ExecuteAsync();
+
+            return interactiveResult.AccessToken;
+        }
+    }
+
     /// <summary>
     /// Service for retrieving emails from Microsoft Outlook using Microsoft Graph API
     /// </summary>
@@ -37,7 +89,7 @@ namespace EmailAgent.Services
             // Validate required configuration values
             if (string.IsNullOrWhiteSpace(_configuration.OutlookClientId))
                 throw new ArgumentException("Outlook Client ID is required", nameof(configuration));
-            
+
             if (string.IsNullOrWhiteSpace(_configuration.OutlookSecret))
                 throw new ArgumentException("Outlook Secret is required", nameof(configuration));
 
@@ -45,8 +97,8 @@ namespace EmailAgent.Services
             {
                 // Initialize Microsoft Graph client
                 InitializeGraphClient();
-                
-                _logger.LogInformation("Outlook Service initialized with Client ID: {ClientId}", 
+
+                _logger.LogInformation("Outlook Service initialized with Client ID: {ClientId}",
                     _configuration.OutlookClientId);
             }
             catch (Exception ex)
@@ -131,7 +183,7 @@ namespace EmailAgent.Services
 
                 // Get the effective folder (defaults to Inbox if no folder specified)
                 var targetFolder = request.GetEffectiveFolder(EmailService.Outlook);
-                _logger.LogDebug("Retrieving emails from folder: {FolderName} ({FolderType})", 
+                _logger.LogDebug("Retrieving emails from folder: {FolderName} ({FolderType})",
                     targetFolder.FolderName, targetFolder.FolderType);
 
                 // Ensure Graph client connection is available
@@ -142,40 +194,43 @@ namespace EmailAgent.Services
 
                 // Get emails from the specified folder, ordered by ReceivedDateTime (oldest first)
                 var messages = await graphClient.Me.MailFolders[folderPath].Messages
-                    .Request()
-                    .OrderBy("receivedDateTime asc")
-                    .Skip(request.StartIndex)
-                    .Top(request.NumberOfEmails)
-                    .Expand("attachments")
-                    .GetAsync();
-
-                _logger.LogInformation("Found {EmailCount} emails in folder {FolderName}", messages.Count, targetFolder.FolderName);
+                    .GetAsync(requestConfiguration =>
+                    {
+                        requestConfiguration.QueryParameters.Orderby = new string[] { "receivedDateTime asc" };
+                        requestConfiguration.QueryParameters.Skip = request.StartIndex;
+                        requestConfiguration.QueryParameters.Top = request.NumberOfEmails;
+                        requestConfiguration.QueryParameters.Expand = new string[] { "attachments" };
+                    });
+                _logger.LogInformation("Found {EmailCount} emails in folder {FolderName}", messages?.Value?.Count ?? 0, targetFolder.FolderName);
 
                 int processedCount = 0;
 
                 // Process each email
-                foreach (var message in messages)
+                if (messages?.Value != null)
                 {
-                    try
+                    foreach (var message in messages.Value)
                     {
-                        var email = await ConvertToEmailAsync(message);
-                        response.Emails.Add(email);
-                        processedCount++;
-                        
-                        _logger.LogDebug("Processed email: {Subject} from {From}", 
-                            email.Subject, email.From);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Error processing email with ID: {MessageId}", message.Id);
-                        // Continue processing other emails
+                        try
+                        {
+                            var email = await ConvertToEmailAsync(message);
+                            response.Emails.Add(email);
+                            processedCount++;
+
+                            _logger.LogDebug("Processed email: {Subject} from {From}",
+                                email.Subject, email.From);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Error processing email with ID: {MessageId}", message.Id);
+                            // Continue processing other emails
+                        }
                     }
                 }
 
                 response.Success = true;
                 response.Count = processedCount;
                 response.Message = processedCount < request.NumberOfEmails ? "Last batch retrieved" : "ok";
-                
+
                 _logger.LogInformation("Successfully retrieved {EmailCount} emails", processedCount);
             }
             catch (Exception ex)
@@ -183,9 +238,9 @@ namespace EmailAgent.Services
                 _logger.LogError(ex, "Error retrieving emails from Outlook service");
                 response.Success = false;
                 response.Message = $"Failed to retrieve emails: {ex.Message}";
-                
+
                 // If it's an authentication failure, provide more specific information
-                if (ex.Message.Contains("Unauthorized") || ex.Message.Contains("401") || 
+                if (ex.Message.Contains("Unauthorized") || ex.Message.Contains("401") ||
                     ex.Message.Contains("authentication") || ex.Message.Contains("token"))
                 {
                     response.Message = "Authentication failed. Please check Outlook credentials and ensure proper consent.";
@@ -214,7 +269,7 @@ namespace EmailAgent.Services
             // Validate that the email entity has a service type of Outlook
             if (email.Service != EmailService.Outlook)
             {
-                _logger.LogWarning("Validation failure: Email ID {EmailId} has wrong service type {ServiceType}, expected Outlook", 
+                _logger.LogWarning("Validation failure: Email ID {EmailId} has wrong service type {ServiceType}, expected Outlook",
                     email.Id, email.Service);
                 return false;
             }
@@ -235,7 +290,6 @@ namespace EmailAgent.Services
 
                 // Use the Email entity's id value to call the Microsoft Graph API's Messages.Delete method
                 await graphClient.Me.Messages[email.Id]
-                    .Request()
                     .DeleteAsync();
 
                 // If the Microsoft Graph service delete operation completes successfully return true
@@ -251,7 +305,7 @@ namespace EmailAgent.Services
             catch (Exception ex)
             {
                 // If the Microsoft Graph service returns any other error or exception, log the email's id and the error details and then return false
-                _logger.LogWarning(ex, "Failed to delete email ID {EmailId}. Error details: {ErrorMessage}", 
+                _logger.LogWarning(ex, "Failed to delete email ID {EmailId}. Error details: {ErrorMessage}",
                     email.Id, ex.Message);
                 return false;
             }
@@ -262,17 +316,21 @@ namespace EmailAgent.Services
         /// </summary>
         private void InitializeGraphClient()
         {
+            _logger.LogDebug("Initializing GraphServiceClient with Client ID: {ClientId}", _configuration.OutlookClientId);
+
             // Create the public client application for delegated permissions
+            // Using "consumers" authority to support personal Microsoft accounts
             var app = PublicClientApplicationBuilder
                 .Create(_configuration.OutlookClientId)
-                .WithAuthority("https://login.microsoftonline.com/common")
+                .WithAuthority("https://login.microsoftonline.com/consumers")
                 .WithRedirectUri("http://localhost")
                 .Build();
 
             _logger.LogDebug("Created PublicClientApplication with Client ID: {ClientId}", _configuration.OutlookClientId);
 
-            // Create Graph client with InteractiveAuthenticationProvider
-            var authProvider = new InteractiveAuthenticationProvider(app, _scopes);
+            // Create a custom authentication provider that works with Microsoft Graph v5
+            var authProvider = new MSALAuthenticationProvider(app, _scopes, _logger);
+
             _graphClient = new GraphServiceClient(authProvider);
 
             _logger.LogDebug("Initialized GraphServiceClient with scopes: {Scopes}", string.Join(", ", _scopes));
@@ -316,7 +374,7 @@ namespace EmailAgent.Services
 
                         email.Attachments.Add(emailAttachment);
 
-                        _logger.LogDebug("Mapped attachment: {Name} ({Size} bytes, type: {Type})", 
+                        _logger.LogDebug("Mapped attachment: {Name} ({Size} bytes, type: {Type})",
                             emailAttachment.Name, emailAttachment.Size, emailAttachment.Type);
                     }
                     catch (Exception ex)

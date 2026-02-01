@@ -24,14 +24,14 @@ namespace EmailAgent.Services
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
             // Validate required configuration values
-            if (string.IsNullOrWhiteSpace(_configuration.GoogleCalendarId))
-                throw new ArgumentException("GoogleCalendarId is required for Gmail service");
+            if (string.IsNullOrWhiteSpace(_configuration.GoogleId))
+                throw new ArgumentException("GoogleId is required for Gmail service");
             if (string.IsNullOrWhiteSpace(_configuration.GoogleClientId))
                 throw new ArgumentException("GoogleClientId is required for Gmail service");
             if (string.IsNullOrWhiteSpace(_configuration.GoogleClientSecret))
                 throw new ArgumentException("GoogleClientSecret is required for Gmail service");
 
-            _logger.LogInformation("Gmail Service initialized for email: {EmailAddress}", _configuration.GoogleCalendarId);
+            _logger.LogInformation("Gmail Service initialized for email: {EmailAddress}", _configuration.GoogleId);
         }
 
         /// <summary>
@@ -210,7 +210,7 @@ namespace EmailAgent.Services
                         ClientSecret = _configuration.GoogleClientSecret
                     },
                     new[] { Google.Apis.Gmail.v1.GmailService.Scope.GmailModify },
-                    _configuration.GoogleCalendarId, // Using as user ID (email address)
+                    _configuration.GoogleId, // Using as user ID (email address)
                     CancellationToken.None);
 
                 // Create Gmail service
