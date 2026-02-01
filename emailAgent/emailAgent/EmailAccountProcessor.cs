@@ -23,7 +23,7 @@ class EmailAccountProcessor
     {
         _config = config;
         _logger = logger;
-    }   
+    }
 
     private async Task<List<Email>> GetOutlookEmails(EmailAccount account)
     {
@@ -31,17 +31,17 @@ class EmailAccountProcessor
         // Implementation for retrieving Outlook emails goes here
         var outlookService = new OutlookService(_config, _logger);
         var emailRequest = new GetEmailRequest
-            {
-                StartIndex = 0,
-                NumberOfEmails = 500,
-                Folder = new EmailFolder("Inbox", FolderType.Inbox, EmailAgent.Entities.EmailService.Outlook)
-            };
+        {
+            StartIndex = 0,
+            NumberOfEmails = 500,
+            Folder = new EmailFolder("Inbox", FolderType.Inbox, EmailAgent.Entities.EmailService.Outlook)
+        };
         var emails = await outlookService.GetEmail(emailRequest);
 
         var resultEmails = new List<Email>();
         var moreEmails = true;
 
-        while(moreEmails)
+        while (moreEmails)
         {
             var fetchedEmails = await outlookService.GetEmail(emailRequest);
             if (fetchedEmails.Count == 0)
@@ -58,15 +58,46 @@ class EmailAccountProcessor
         return resultEmails;
     }
 
+    private async Task<List<Email>> GetGMailEmails(EmailAccount account)
+    {
+        _config.GoogleId = account.Mailbox;
+
+        var gmailService = new GmailService(_config, Program.GetLogger<GmailService>());
+
+        var request = new GetEmailRequest
+        {
+            StartIndex = 0,
+            NumberOfEmails = 500
+        };
+
+        var moreEmails = true;
+        var resultEmails = new List<Email>();
+        while (moreEmails)
+        {
+            var response = await gmailService.GetEmail(request);
+            if (0 == response.Count)
+            {
+                moreEmails = false;
+            }
+
+            if (0 != response.Emails.Count)
+            {
+                resultEmails.AddRange(response.Emails);
+                request.StartIndex += response.Count;
+            }
+        }
+
+        return resultEmails;
+    }
     private EmailService GetEmailService(string accountType)
     {
-        switch(accountType.ToUpper())
+        switch (accountType.ToUpper())
         {
-            case "OUTLOOK" :
+            case "OUTLOOK":
                 return EmailService.Outlook;
-            case "GMAIL" :
+            case "GMAIL":
                 return EmailService.Gmail;
-            case "OWA" :
+            case "OWA":
                 return EmailService.Owa;
             default:
                 throw new ArgumentOutOfRangeException(nameof(accountType));
@@ -75,18 +106,21 @@ class EmailAccountProcessor
 
     public async Task<List<Email>> GetEmails(EmailAccount account)
     {
-        switch(GetEmailService(account.Type))
+        if (true == account.Enabled)
         {
-            case EmailService.Outlook:
-                _logger.LogInformation($"processing outlook account {account.Mailbox}");
-                var email = await GetOutlookEmails(account);
-                return email;
-            case EmailService.Gmail:
-                _logger.LogInformation($"processing gmail account {account.Mailbox}");
-                return new List<Email>();
-            case EmailService.Owa:
-                _logger.LogInformation($"processing Owa account {account.Mailbox}");
-                return new List<Email>();
+            switch (GetEmailService(account.Type))
+            {
+                case EmailService.Outlook:
+                    _logger.LogInformation($"processing outlook account {account.Mailbox}");
+                    var email = await GetOutlookEmails(account);
+                    return email;
+                case EmailService.Gmail:
+                    _logger.LogInformation($"processing gmail account {account.Mailbox}");
+                    return await GetGMailEmails(account);
+                case EmailService.Owa:
+                    _logger.LogInformation($"processing Owa account {account.Mailbox}");
+                    return new List<Email>();
+            }
         }
         return null;
     }
