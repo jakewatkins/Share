@@ -44,6 +44,44 @@
             "type": "coreclr",
             "request": "attach",
             "processId": "${command:pickProcess}"
+        },
+        {
+            "name": "Debug EmailProcessor",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-emailprocessor",
+            "program": "${workspaceFolder}/emailProcessor/bin/Debug/net9.0/EmailProcessor.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/emailProcessor",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            },
+            "logging": {
+                "moduleLoad": false
+            },
+            "justMyCode": false,
+            "suppressJITOptimizations": true
+        },
+        {
+            "name": "Debug EmailProcessor (Stop at Entry)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-emailprocessor",
+            "program": "${workspaceFolder}/emailProcessor/bin/Debug/net9.0/EmailProcessor.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/emailProcessor",
+            "console": "integratedTerminal",
+            "stopAtEntry": true,
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            },
+            "logging": {
+                "moduleLoad": false
+            },
+            "justMyCode": false,
+            "suppressJITOptimizations": true
         }
     ]
 }

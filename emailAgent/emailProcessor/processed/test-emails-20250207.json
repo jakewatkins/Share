@@ -1,0 +1,17 @@
+[
+    {
+        "id": "test-email-001",
+        "service": "gmail",
+        "from": "test@example.com",
+        "to": [
+            "recipient@example.com"
+        ],
+        "cc": [],
+        "bcc": [],
+        "sentDateTime": "2025-02-07T10:30:00Z",
+        "subject": "Test Email Subject",
+        "body": "<p>This is a test email body with <strong>HTML</strong> content.</p>",
+        "attachments": [],
+        "classification": "test-category"
+    }
+]
