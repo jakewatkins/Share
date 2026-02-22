@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Threading;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Microsoft.Identity.Client;
+using Microsoft.Identity.Client.Extensions.Msal;
 using Microsoft.Kiota.Abstractions;
 using Microsoft.Kiota.Abstractions.Authentication;
 using Microsoft.Extensions.Logging;
@@ -44,21 +46,29 @@ namespace EmailAgent.Services
                 var accounts = await _clientApp.GetAccountsAsync();
                 if (accounts.Any())
                 {
+                    _logger.LogDebug("Attempting silent token acquisition for account: {Account}", accounts.FirstOrDefault()?.Username);
                     var result = await _clientApp.AcquireTokenSilent(_scopes, accounts.FirstOrDefault())
                         .ExecuteAsync();
+                    _logger.LogDebug("Successfully acquired token silently");
                     return result.AccessToken;
                 }
             }
-            catch (MsalUiRequiredException)
+            catch (MsalUiRequiredException ex)
             {
-                _logger.LogDebug("Silent token acquisition failed, requiring interactive authentication");
+                _logger.LogDebug(ex, "Silent token acquisition failed, requiring interactive authentication");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error during silent token acquisition");
             }
 
             // Acquire token interactively
+            _logger.LogInformation("Performing interactive authentication");
             var interactiveResult = await _clientApp.AcquireTokenInteractive(_scopes)
                 .WithPrompt(Microsoft.Identity.Client.Prompt.SelectAccount)
                 .ExecuteAsync();
 
+            _logger.LogInformation("Interactive authentication successful for account: {Account}", interactiveResult.Account?.Username);
             return interactiveResult.AccessToken;
         }
     }
@@ -312,28 +322,65 @@ namespace EmailAgent.Services
         }
 
         /// <summary>
-        /// Initializes the Microsoft Graph client with authentication
+        /// Initializes the Microsoft Graph client with authentication and persistent token storage
+        /// The first run will require interactive authentication, subsequent runs will use cached tokens
         /// </summary>
         private void InitializeGraphClient()
         {
             _logger.LogDebug("Initializing GraphServiceClient with Client ID: {ClientId}", _configuration.OutlookClientId);
 
-            // Create the public client application for delegated permissions
-            // Using "consumers" authority to support personal Microsoft accounts
-            var app = PublicClientApplicationBuilder
-                .Create(_configuration.OutlookClientId)
-                .WithAuthority("https://login.microsoftonline.com/consumers")
-                .WithRedirectUri("http://localhost")
-                .Build();
+            try
+            {
+                // Create token storage configuration
+                var tokenCacheDir = Path.Combine(Directory.GetCurrentDirectory(), "outlook_tokens");
+                Directory.CreateDirectory(tokenCacheDir);
+                
+                var storageProperties = new StorageCreationPropertiesBuilder(
+                    "outlook_token_cache.dat", 
+                    tokenCacheDir)
+                    .Build();
 
-            _logger.LogDebug("Created PublicClientApplication with Client ID: {ClientId}", _configuration.OutlookClientId);
+                _logger.LogDebug("Using token cache directory: {TokenCacheDir}", tokenCacheDir);
 
-            // Create a custom authentication provider that works with Microsoft Graph v5
-            var authProvider = new MSALAuthenticationProvider(app, _scopes, _logger);
+                // Create MsalCacheHelper for persistent token storage
+                var cacheHelper = MsalCacheHelper.CreateAsync(storageProperties).GetAwaiter().GetResult();
 
-            _graphClient = new GraphServiceClient(authProvider);
+                // Create the public client application for delegated permissions
+                // Using "consumers" authority to support personal Microsoft accounts
+                var app = PublicClientApplicationBuilder
+                    .Create(_configuration.OutlookClientId)
+                    .WithAuthority("https://login.microsoftonline.com/consumers")
+                    .WithRedirectUri("http://localhost")
+                    .Build();
 
-            _logger.LogDebug("Initialized GraphServiceClient with scopes: {Scopes}", string.Join(", ", _scopes));
+                // Register the token cache with the application
+                cacheHelper.RegisterCache(app.UserTokenCache);
+
+                _logger.LogDebug("Created PublicClientApplication with persistent token cache");
+
+                // Create a custom authentication provider that works with Microsoft Graph v5
+                var authProvider = new MSALAuthenticationProvider(app, _scopes, _logger);
+
+                _graphClient = new GraphServiceClient(authProvider);
+
+                _logger.LogInformation("Initialized GraphServiceClient with persistent token storage. Cache location: {TokenCacheDir}", tokenCacheDir);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to initialize GraphServiceClient with persistent token storage. Falling back to in-memory cache.");
+                
+                // Fallback to in-memory cache if persistent storage fails
+                var app = PublicClientApplicationBuilder
+                    .Create(_configuration.OutlookClientId)
+                    .WithAuthority("https://login.microsoftonline.com/consumers")
+                    .WithRedirectUri("http://localhost")
+                    .Build();
+
+                var authProvider = new MSALAuthenticationProvider(app, _scopes, _logger);
+                _graphClient = new GraphServiceClient(authProvider);
+                
+                _logger.LogWarning("Using in-memory token cache. User may need to re-authenticate on each run.");
+            }
         }
 
         /// <summary>
