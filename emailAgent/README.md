@@ -16,6 +16,16 @@ A .NET 8.0/9.0 multi-provider email retrieval agent that supports Gmail and Micr
 - **Folder Support**: Retrieve emails from specific folders (Inbox, Sent, Drafts, etc.)
 - **Attachment Metadata**: Capture attachment information without downloading content
 
+## 📦 Ready-to-Use Deployment
+
+**Pre-built applications are available at `~/apps/` for immediate use with Digital Valet:**
+
+- **EmailAgent**: `~/apps/emailAgent/launch.sh` - Core email processing agent
+- **EmailProcessor**: `~/apps/emailProcessor/launch.sh` - Advanced email workflow automation  
+- **EmailClassifier**: `~/apps/emailClassifier/launch.sh` - AI-powered email classification
+
+These are self-contained deployments with all dependencies included. See [`~/apps/EMAIL_APPS_README.md`](~/apps/EMAIL_APPS_README.md) for usage details.
+
 ## 📋 Prerequisites
 
 - .NET 8.0 or .NET 9.0 SDK
@@ -125,6 +135,25 @@ Update `settings.json`:
 ```
 
 ## 🏃‍♂️ Running the Application
+
+### Option 1: Use Pre-built Applications (Recommended for Digital Valet)
+
+Use the deployed, self-contained applications:
+
+```bash
+# Core email processing agent
+~/apps/emailAgent/launch.sh [config_file]
+
+# Advanced email workflow automation
+~/apps/emailProcessor/launch.sh [options]
+
+# AI-powered email classification
+~/apps/emailClassifier/launch.sh [options]
+```
+
+See [`~/apps/EMAIL_APPS_README.md`](~/apps/EMAIL_APPS_README.md) for detailed usage instructions.
+
+### Option 2: Development/Build from Source
 
 ```bash
 # Build the solution
