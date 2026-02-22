@@ -6,6 +6,11 @@ settings.json
 
 *.settings.json
 
+# Token storage directories - DO NOT COMMIT TOKENS
+gmail_tokens/
+outlook_tokens/
+*_tokens/
+
 venv/
 
 .DS_Store
