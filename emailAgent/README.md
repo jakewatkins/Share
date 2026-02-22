@@ -21,7 +21,7 @@ A .NET 8.0/9.0 multi-provider email retrieval agent that supports Gmail and Micr
 **Pre-built applications are available at `~/apps/` for immediate use with Digital Valet:**
 
 - **EmailAgent**: `~/apps/emailAgent/launch.sh` - Core email processing agent
-- **EmailProcessor**: `~/apps/emailProcessor/launch.sh` - Advanced email workflow automation  
+- **EmailProcessor**: `~/apps/emailProcessor/launch.sh` - Advanced email workflow automation
 - **EmailClassifier**: `~/apps/emailClassifier/launch.sh` - AI-powered email classification
 
 These are self-contained deployments with all dependencies included. See [`~/apps/EMAIL_APPS_README.md`](~/apps/EMAIL_APPS_README.md) for usage details.
