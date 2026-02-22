@@ -103,19 +103,9 @@ namespace EmailAgent.Services
             if (string.IsNullOrWhiteSpace(_configuration.OutlookSecret))
                 throw new ArgumentException("Outlook Secret is required", nameof(configuration));
 
-            try
-            {
-                // Initialize Microsoft Graph client
-                InitializeGraphClient();
-
-                _logger.LogInformation("Outlook Service initialized with Client ID: {ClientId}",
-                    _configuration.OutlookClientId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to initialize Outlook Service");
-                throw new InvalidOperationException("Failed to initialize Outlook Service", ex);
-            }
+            // Note: Graph client initialization is deferred to first use due to async requirements
+            _logger.LogInformation("Outlook Service initialized with Client ID: {ClientId}",
+                _configuration.OutlookClientId);
         }
 
         /// <summary>
@@ -123,10 +113,13 @@ namespace EmailAgent.Services
         /// </summary>
         /// <returns>The configured GraphServiceClient instance</returns>
         /// <exception cref="InvalidOperationException">Thrown when service is disposed or connection failed</exception>
-        private GraphServiceClient EnsureConnection()
+        private async Task<GraphServiceClient> EnsureConnectionAsync()
         {
             if (_disposed)
                 throw new ObjectDisposedException(nameof(OutlookService));
+
+            if (_graphClient == null)
+                await InitializeGraphClientAsync();
 
             if (_graphClient == null)
                 throw new InvalidOperationException("Graph service client connection is not available");
@@ -197,7 +190,7 @@ namespace EmailAgent.Services
                     targetFolder.FolderName, targetFolder.FolderType);
 
                 // Ensure Graph client connection is available
-                var graphClient = EnsureConnection();
+                var graphClient = await EnsureConnectionAsync();
 
                 // Get the folder path for Microsoft Graph
                 var folderPath = GetGraphFolderPath(targetFolder);
@@ -294,7 +287,7 @@ namespace EmailAgent.Services
             try
             {
                 // Ensure Graph service client connection is available
-                var graphClient = EnsureConnection();
+                var graphClient = await EnsureConnectionAsync();
 
                 _logger.LogInformation("Attempting to delete email with ID: {EmailId}", email.Id);
 
@@ -325,7 +318,7 @@ namespace EmailAgent.Services
         /// Initializes the Microsoft Graph client with authentication and persistent token storage
         /// The first run will require interactive authentication, subsequent runs will use cached tokens
         /// </summary>
-        private void InitializeGraphClient()
+        private async Task InitializeGraphClientAsync()
         {
             _logger.LogDebug("Initializing GraphServiceClient with Client ID: {ClientId}", _configuration.OutlookClientId);
 
@@ -334,16 +327,18 @@ namespace EmailAgent.Services
                 // Create token storage configuration
                 var tokenCacheDir = Path.Combine(Directory.GetCurrentDirectory(), "outlook_tokens");
                 Directory.CreateDirectory(tokenCacheDir);
-                
+
+                // Configure storage properties with platform-specific settings for macOS
                 var storageProperties = new StorageCreationPropertiesBuilder(
-                    "outlook_token_cache.dat", 
+                    "outlook_token_cache.dat",
                     tokenCacheDir)
+                    .WithMacKeyChain("EmailAgent.Outlook", "OutlookTokenCache") // Add keychain configuration for macOS
                     .Build();
 
                 _logger.LogDebug("Using token cache directory: {TokenCacheDir}", tokenCacheDir);
 
                 // Create MsalCacheHelper for persistent token storage
-                var cacheHelper = MsalCacheHelper.CreateAsync(storageProperties).GetAwaiter().GetResult();
+                var cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties);
 
                 // Create the public client application for delegated permissions
                 // Using "consumers" authority to support personal Microsoft accounts
@@ -368,7 +363,7 @@ namespace EmailAgent.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to initialize GraphServiceClient with persistent token storage. Falling back to in-memory cache.");
-                
+
                 // Fallback to in-memory cache if persistent storage fails
                 var app = PublicClientApplicationBuilder
                     .Create(_configuration.OutlookClientId)
@@ -378,7 +373,7 @@ namespace EmailAgent.Services
 
                 var authProvider = new MSALAuthenticationProvider(app, _scopes, _logger);
                 _graphClient = new GraphServiceClient(authProvider);
-                
+
                 _logger.LogWarning("Using in-memory token cache. User may need to re-authenticate on each run.");
             }
         }
