@@ -31,13 +31,17 @@ namespace EmailAgent.Examples
                 using var loggerFactory = LoggerFactory.Create(builder =>
                     builder.AddConsole());
 
-                var logger = loggerFactory.CreateLogger<GmailService>();
+                var gmailLogger = loggerFactory.CreateLogger<GmailService>();
+                var keyVaultLogger = loggerFactory.CreateLogger<KeyVaultService>();
 
-                // Initialize configuration loader
-                var agentConfig = new AgentConfiguration(configuration);
+                // Initialize KeyVault service
+                var keyVaultService = new KeyVaultService(configuration, keyVaultLogger);
+
+                // Email address to retrieve emails for
+                var emailAddress = "example@gmail.com"; // Replace with actual Gmail address
 
                 // Create Gmail service
-                var gmailService = new GmailService(agentConfig, logger);
+                var gmailService = new GmailService(configuration, keyVaultService, gmailLogger, emailAddress);
 
                 // Create email request
                 var request = new GetEmailRequest
@@ -45,7 +49,7 @@ namespace EmailAgent.Examples
                     NumberOfEmails = 10  // Retrieve 10 most recent emails
                 };
 
-                Console.WriteLine("Retrieving emails from Gmail...");
+                Console.WriteLine($"Retrieving emails from Gmail for: {emailAddress}...");
 
                 // Get emails
                 var response = await gmailService.GetEmail(request);
@@ -60,14 +64,14 @@ namespace EmailAgent.Examples
                         Console.WriteLine($"Email ID: {email.Id}");
                         Console.WriteLine($"From: {email.From}");
                         Console.WriteLine($"To: {string.Join(", ", email.To)}");
-                        
+
                         if (email.CC.Any())
                             Console.WriteLine($"CC: {string.Join(", ", email.CC)}");
-                            
+
                         Console.WriteLine($"Subject: {email.Subject}");
                         Console.WriteLine($"Sent: {email.SentDateTime:yyyy-MM-dd HH:mm:ss}");
                         Console.WriteLine($"Service: {email.Service}");
-                        
+
                         if (email.Attachments.Any())
                         {
                             Console.WriteLine($"Attachments ({email.Attachments.Count}):");
@@ -76,15 +80,15 @@ namespace EmailAgent.Examples
                                 Console.WriteLine($"  - {attachment.Name} ({attachment.Type}, {attachment.Size} bytes)");
                             }
                         }
-                        
+
                         // Show first 100 characters of body
-                        var bodyPreview = email.Body.Length > 100 
-                            ? email.Body.Substring(0, 100) + "..." 
+                        var bodyPreview = email.Body.Length > 100
+                            ? email.Body.Substring(0, 100) + "..."
                             : email.Body;
                         Console.WriteLine($"Body Preview: {bodyPreview}");
                         Console.WriteLine(new string('-', 50));
                     }
-                    
+
                     Console.WriteLine($"Total emails processed: {response.Count}");
                 }
                 else

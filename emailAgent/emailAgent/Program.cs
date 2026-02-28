@@ -1,69 +1,64 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Extensions.Logging;
 using EmailAgent.Core;
 using EmailAgent.Entities;
+using EmailAgent.Services;
 using System.Text.Json;
 
 namespace EmailAgent;
 
 class Program
 {
-    private static IConfiguration? _configuration;
-    private static ILogger<Program>? _logger;
-    private static EmailAgentConfiguration? _appConfig;
-
     static async Task Main(string[] args)
     {
         try
         {
-            // Setup configuration
-            SetupConfiguration();
+            // Create host with dependency injection
+            var host = CreateHostBuilder(args).Build();
 
-            // Setup logging
-            SetupLogging();
+            // Get required services from DI container
+            var logger = host.Services.GetRequiredService<ILogger<Program>>();
+            var configuration = host.Services.GetRequiredService<IConfiguration>();
+            var emailAccountProcessor = host.Services.GetRequiredService<EmailAccountProcessor>();
+
+            logger.LogInformation("Email Agent starting up...");
 
             // Load application configuration
-            LoadApplicationConfiguration();
+            var appConfig = new EmailAgentConfiguration();
+            configuration.Bind(appConfig);
 
-            _logger!.LogInformation("Email Agent starting up...");
-            _logger.LogInformation("Loaded configuration for {AccountCount} email accounts", _appConfig!.EmailAccounts.Count);
+            // Validate configuration
+            ValidateConfiguration(appConfig);
 
-            // Create agent configuration with better error handling
-            AgentConfiguration agentConfiguration = new AgentConfiguration(_configuration);
-            var emailAccountProcessor = new EmailAccountProcessor(agentConfiguration, GetLogger<EmailAccountProcessor>());
+            logger.LogInformation("Loaded configuration for {AccountCount} email accounts", appConfig.EmailAccounts.Count);
 
-            // Log the email accounts (without sensitive data)
-            foreach (var account in _appConfig.EmailAccounts)
+            // Process email accounts
+            foreach (var account in appConfig.EmailAccounts)
             {
-                if (true == account.Enabled)
+                if (account.Enabled)
                 {
-                    _logger.LogInformation("Account configured: {Type} - {Mailbox}", account.Type, account.Mailbox);
+                    logger.LogInformation("Account configured: {Type} - {Mailbox}", account.Type, account.Mailbox);
                     var emails = await emailAccountProcessor.GetEmails(account);
-                    if (null != emails)
+                    if (emails != null)
                     {
-                        SaveEmailAsJson(account, emails);
+                        SaveEmailAsJson(account, emails, appConfig.TempFolder, logger);
                     }
                 }
                 else
                 {
-                    _logger.LogInformation($"Skking {account.Mailbox} - it has been disabled");
+                    logger.LogInformation("Skipping {Mailbox} - it has been disabled", account.Mailbox);
                 }
             }
 
-            _logger.LogInformation("Email Agent completed successfully");
+            logger.LogInformation("Email Agent completed successfully");
         }
         catch (Exception ex)
         {
-            if (_logger != null)
-            {
-                _logger.LogError(ex, "Fatal error occurred in Email Agent");
-            }
-            else
-            {
-                Console.WriteLine($"Fatal error: {ex.Message}");
-            }
+            Console.WriteLine($"Fatal error: {ex.Message}");
             Environment.Exit(1);
         }
         finally
@@ -73,76 +68,57 @@ class Program
     }
 
     /// <summary>
-    /// Sets up the configuration from settings.json
+    /// Creates and configures the host builder with dependency injection
     /// </summary>
-    private static void SetupConfiguration()
-    {
-        var builder = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
-            .AddJsonFile("settings.json", optional: false, reloadOnChange: true)
-            .AddJsonFile("settings.development.json", optional: true, reloadOnChange: true)
-            .AddEnvironmentVariables();
+    static IHostBuilder CreateHostBuilder(string[] args) =>
+        Host.CreateDefaultBuilder(args)
+            .ConfigureAppConfiguration((context, config) =>
+            {
+                config.SetBasePath(Directory.GetCurrentDirectory())
+                      .AddJsonFile("settings.json", optional: false, reloadOnChange: true)
+                      .AddJsonFile("settings.development.json", optional: true, reloadOnChange: true)
+                      .AddEnvironmentVariables();
+            })
+            .ConfigureLogging((context, logging) =>
+            {
+                // Clear default providers
+                logging.ClearProviders();
 
-        _configuration = builder.Build();
-    }
+                // Setup Serilog
+                Log.Logger = new LoggerConfiguration()
+                    .ReadFrom.Configuration(context.Configuration)
+                    .CreateLogger();
+
+                // Add Serilog to the logging pipeline
+                logging.AddSerilog();
+            })
+            .ConfigureServices((context, services) =>
+            {
+                // Register KeyVault service
+                services.AddSingleton<KeyVaultService>();
+
+                // Register email account processor
+                services.AddTransient<EmailAccountProcessor>();
+
+                // Register AgentConfiguration as singleton since it loads secrets once
+                services.AddSingleton<AgentConfiguration>();
+            });
 
     /// <summary>
-    /// Sets up Serilog logging based on configuration
+    /// Validates the application configuration
     /// </summary>
-    private static void SetupLogging()
+    private static void ValidateConfiguration(EmailAgentConfiguration appConfig)
     {
-        Log.Logger = new LoggerConfiguration()
-            .ReadFrom.Configuration(_configuration!)
-            .CreateLogger();
-
-        var loggerFactory = LoggerFactory.Create(builder =>
-        {
-            builder.AddSerilog();
-        });
-
-        _logger = loggerFactory.CreateLogger<Program>();
-    }
-
-    /// <summary>
-    /// Creates a logger factory for dependency injection
-    /// </summary>
-    private static ILoggerFactory CreateLoggerFactory()
-    {
-        return LoggerFactory.Create(builder =>
-        {
-            builder.AddSerilog();
-        });
-    }
-
-    /// <summary>
-    /// Get a type specific logger
-    /// </summary>
-    public static ILogger<T> GetLogger<T>()
-    {
-        var loggerFactory = CreateLoggerFactory();
-        return loggerFactory.CreateLogger<T>();
-    }
-
-    /// <summary>
-    /// Loads the application-specific configuration
-    /// </summary>
-    private static void LoadApplicationConfiguration()
-    {
-        _appConfig = new EmailAgentConfiguration();
-        _configuration!.Bind(_appConfig);
-
-        // Validate required configuration
-        if (string.IsNullOrWhiteSpace(_appConfig.KeyvaultName))
+        if (string.IsNullOrWhiteSpace(appConfig.KeyvaultName))
             throw new InvalidOperationException("keyvaultName is required in configuration");
 
-        if (string.IsNullOrWhiteSpace(_appConfig.TempFolder))
+        if (string.IsNullOrWhiteSpace(appConfig.TempFolder))
             throw new InvalidOperationException("TempFolder is required in configuration");
 
-        if (_appConfig.EmailAccounts.Count == 0)
+        if (appConfig.EmailAccounts.Count == 0)
             throw new InvalidOperationException("At least one email account must be configured");
 
-        // Validate each email account
-        foreach (var account in _appConfig.EmailAccounts)
+        foreach (var account in appConfig.EmailAccounts)
         {
             if (string.IsNullOrWhiteSpace(account.Type))
                 throw new InvalidOperationException("Email account type is required");
@@ -153,15 +129,14 @@ class Program
             if (account.Type.ToLower() != "gmail" && account.Type.ToLower() != "outlook")
                 throw new InvalidOperationException($"Unsupported email account type: {account.Type}");
         }
-
-        _logger!.LogInformation("Configuration validation completed successfully");
     }
 
     private static string GetMailBoxName(string emailAddress)
     {
         return emailAddress.Replace("@", "").Replace(".", "");
     }
-    private static void SaveEmailAsJson(EmailAccount account, List<Email> emails)
+
+    private static void SaveEmailAsJson(EmailAccount account, List<Email> emails, string tempFolder, Microsoft.Extensions.Logging.ILogger logger)
     {
         try
         {
@@ -170,23 +145,23 @@ class Program
 
             var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
             var fileName = $"{sanitizedMailbox}-{timestamp}.json";
-            var filePath = Path.Combine(_appConfig!.TempFolder, fileName);
+            var filePath = Path.Combine(tempFolder, fileName);
 
-            _logger!.LogInformation("Saving {EmailCount} emails for account {Mailbox} to {FileName}",
+            logger.LogInformation("Saving {EmailCount} emails for account {Mailbox} to {FileName}",
                 emails.Count, account.Mailbox, fileName);
 
             // Ensure the temp directory exists
-            if (!Directory.Exists(_appConfig.TempFolder))
+            if (!Directory.Exists(tempFolder))
             {
-                Directory.CreateDirectory(_appConfig.TempFolder);
-                _logger.LogInformation("Created temp directory: {TempFolder}", _appConfig.TempFolder);
+                Directory.CreateDirectory(tempFolder);
+                logger.LogInformation("Created temp directory: {TempFolder}", tempFolder);
             }
 
             // If the file already exists - delete it
             if (File.Exists(filePath))
             {
                 File.Delete(filePath);
-                _logger.LogInformation("Deleted existing file: {FilePath}", filePath);
+                logger.LogInformation("Deleted existing file: {FilePath}", filePath);
             }
 
             // Serialize the emails to the file using a json serializer
@@ -199,13 +174,12 @@ class Program
             var jsonString = JsonSerializer.Serialize(emails, jsonOptions);
             File.WriteAllText(filePath, jsonString);
 
-            _logger.LogInformation("Successfully saved emails to: {FilePath}", filePath);
+            logger.LogInformation("Successfully saved emails to: {FilePath}", filePath);
         }
         catch (Exception ex)
         {
-            _logger!.LogError(ex, "Error saving emails for account {Mailbox} to JSON", account.Mailbox);
+            logger.LogError(ex, "Error saving emails for account {Mailbox} to JSON", account.Mailbox);
             throw; // Re-throw to maintain error handling behavior
         }
     }
-
 }
