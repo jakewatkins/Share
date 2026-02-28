@@ -4,6 +4,7 @@ using Google.Apis.Auth.OAuth2;
 using Google.Apis.Gmail.v1;
 using Google.Apis.Gmail.v1.Data;
 using Google.Apis.Services;
+using Google.Apis.Util.Store;
 using Microsoft.Extensions.Logging;
 using System.Text;
 
@@ -24,14 +25,14 @@ namespace EmailAgent.Services
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
             // Validate required configuration values
-            if (string.IsNullOrWhiteSpace(_configuration.GoogleCalendarId))
-                throw new ArgumentException("GoogleCalendarId is required for Gmail service");
+            if (string.IsNullOrWhiteSpace(_configuration.GoogleId))
+                throw new ArgumentException("GoogleId is required for Gmail service");
             if (string.IsNullOrWhiteSpace(_configuration.GoogleClientId))
                 throw new ArgumentException("GoogleClientId is required for Gmail service");
             if (string.IsNullOrWhiteSpace(_configuration.GoogleClientSecret))
                 throw new ArgumentException("GoogleClientSecret is required for Gmail service");
 
-            _logger.LogInformation("Gmail Service initialized for email: {EmailAddress}", _configuration.GoogleCalendarId);
+            _logger.LogInformation("Gmail Service initialized for email: {EmailAddress}", _configuration.GoogleId);
         }
 
         /// <summary>
@@ -196,13 +197,24 @@ namespace EmailAgent.Services
             }
         }
 
+        /// <summary>
+        /// Initializes the Gmail service with OAuth2 authentication and persistent token storage
+        /// The first run will require interactive authentication, subsequent runs will use stored tokens
+        /// </summary>
         private async Task InitializeGmailService()
         {
             try
             {
                 _logger.LogInformation("Initializing Gmail service authentication");
 
-                // Use GoogleWebAuthorizationBroker for authentication
+                // Create file-based token store for persistent authentication
+                // This storage location matches the pattern used in outlookAgent for consistency
+                var tokenStorePath = Path.Combine(Directory.GetCurrentDirectory(), "gmail_tokens");
+                var dataStore = new FileDataStore(tokenStorePath, true);
+
+                _logger.LogDebug("Using token storage path: {TokenStorePath}", tokenStorePath);
+
+                // Use GoogleWebAuthorizationBroker with persistent storage
                 var userCredential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
                     new ClientSecrets
                     {
@@ -210,8 +222,9 @@ namespace EmailAgent.Services
                         ClientSecret = _configuration.GoogleClientSecret
                     },
                     new[] { Google.Apis.Gmail.v1.GmailService.Scope.GmailModify },
-                    _configuration.GoogleCalendarId, // Using as user ID (email address)
-                    CancellationToken.None);
+                    _configuration.GoogleId, // Using as user ID (email address)
+                    CancellationToken.None,
+                    dataStore); // This enables persistent token storage
 
                 // Create Gmail service
                 _gmailService = new Google.Apis.Gmail.v1.GmailService(new BaseClientService.Initializer
@@ -220,7 +233,7 @@ namespace EmailAgent.Services
                     ApplicationName = "EmailAgent Gmail Service"
                 });
 
-                _logger.LogInformation("Gmail service initialized successfully");
+                _logger.LogInformation("Gmail service initialized successfully. Tokens stored at: {TokenStorePath}", tokenStorePath);
             }
             catch (Exception ex)
             {

@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>EmailAgent.emailServices</AssemblyName>
     <RootNamespace>EmailAgent</RootNamespace>
-    
+
     <!-- NuGet Package Properties -->
     <PackageId>EmailAgent.emailServices</PackageId>
     <Version>1.2.0</Version>
@@ -38,9 +38,9 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Graph" Version="4.54.0" />
-    <PackageReference Include="Microsoft.Graph.Auth" Version="1.0.0-preview.7" />
+    <PackageReference Include="Microsoft.Graph" Version="5.95.0" />
     <PackageReference Include="Microsoft.Identity.Client" Version="4.65.0" />
+    <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.65.0" />
     <PackageReference Include="Google.Apis.Gmail.v1" Version="1.69.0.3742" />
     <PackageReference Include="Google.Apis.Auth" Version="1.69.0" />
   </ItemGroup>
