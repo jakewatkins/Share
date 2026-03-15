@@ -1,0 +1,57 @@
+# EmailServices.Api - Development Environment
+# Docker Compose configuration for local development
+
+version: '3.8'
+
+services:
+  emailservices-api:
+    build:
+      context: .
+      dockerfile: EmailServices.Api/Dockerfile
+      target: final
+    container_name: emailservices-api-dev
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - keyvaultName=kvGPSecrets
+      - Logging__LogLevel__Default=Information
+      - Logging__LogLevel__EmailServices.Api=Debug
+      - Logging__LogLevel__EmailAgent=Debug
+    volumes:
+      # Mount configuration for development
+      - ./settings.json:/app/settings.json:ro
+      # Mount for development logs
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    networks:
+      - emailservices-network
+
+  # Optional: Add logging container for development
+  logging:
+    image: grafana/loki:latest
+    container_name: loki-dev
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./docker/loki-config.yml:/etc/loki/local-config.yaml:ro
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - emailservices-network
+    profiles:
+      - logging
+
+networks:
+  emailservices-network:
+    driver: bridge
+
+volumes:
+  logs:
+    driver: local

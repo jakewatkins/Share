@@ -1,0 +1,28 @@
+{
+    "Logging": {
+        "LogLevel": {
+            "Default": "Warning",
+            "EmailServices.Api": "Information",
+            "EmailAgent": "Information",
+            "System": "Error",
+            "Microsoft": "Error",
+            "Microsoft.AspNetCore.Hosting.Diagnostics": "Information"
+        }
+    },
+    "keyvaultName": "kvGPSecrets",
+    "AllowedHosts": "*",
+    "ConnectionStrings": {
+        "DefaultConnection": ""
+    },
+    "Kestrel": {
+        "Endpoints": {
+            "Http": {
+                "Url": "http://0.0.0.0:8080"
+            }
+        }
+    },
+    "ForwardedHeaders": {
+        "ForwardedProtoHeaderName": "X-Forwarded-Proto",
+        "OriginalProtoHeaderName": "X-Original-Proto"
+    }
+}
