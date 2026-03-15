@@ -6,7 +6,7 @@ A .NET 8.0 shared library providing common entities and services for email proce
 
 This library provides shared entities and services for:
 - Gmail service integration
-- Microsoft Outlook service integration  
+- Microsoft Outlook service integration
 - Microsoft OWA (Outlook Web Access) integration
 
 ## Shared Entities
@@ -38,7 +38,7 @@ Represents an email attachment with:
 #### `EmailService`
 Enum identifying the email service:
 - `Gmail`
-- `Outlook` 
+- `Outlook`
 - `OWA`
 
 ### Request/Response Pattern
@@ -106,7 +106,7 @@ Provides Gmail integration using Google's Gmail API v1.
 
 **Configuration Requirements:**
 - `GoogleClientId` - OAuth2 client ID for Gmail API access
-- `GoogleClientSecret` - OAuth2 client secret for Gmail API access  
+- `GoogleClientSecret` - OAuth2 client secret for Gmail API access
 - `GoogleCalendarId` - Email address for authentication (shared with calendar service)
 
 **Features:**
@@ -141,7 +141,11 @@ Provides Microsoft Outlook integration using Microsoft Graph API.
 
 **Usage:**
 ```csharp
-var outlookService = new OutlookService(agentConfiguration, logger);
+// Initialize KeyVault service
+var keyVaultService = new KeyVaultService(configuration, keyVaultLogger);
+
+// Initialize Outlook service with email address
+var outlookService = new OutlookService(agentConfiguration, keyVaultService, logger, "user@outlook.com");
 var response = await outlookService.GetEmail(request);
 ```
 
@@ -212,8 +216,11 @@ if (response.Success)
 Provides email retrieval functionality for Microsoft Outlook using Microsoft Graph API.
 
 ```csharp
+// Initialize KeyVault service
+var keyVaultService = new KeyVaultService(configuration, keyVaultLogger);
+
 // Initialize service
-var outlookService = new OutlookService(agentConfiguration, logger);
+var outlookService = new OutlookService(agentConfiguration, keyVaultService, logger, "user@outlook.com");
 
 // Retrieve emails
 var request = new GetEmailRequest { StartIndex = 0, NumberOfEmails = 10 };

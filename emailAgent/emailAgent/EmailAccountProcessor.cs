@@ -36,9 +36,9 @@ class EmailAccountProcessor
 
         try
         {
-            // TODO: Remove this temporary AgentConfiguration when OutlookService is refactored in Phase 3
+            // Create AgentConfiguration and OutlookService with Key Vault support
             var agentConfiguration = new AgentConfiguration(_configuration);
-            var outlookService = new OutlookService(agentConfiguration, _logger);
+            var outlookService = new OutlookService(agentConfiguration, _keyVaultService, _logger, account.Mailbox);
 
             var emailRequest = new GetEmailRequest
             {

@@ -79,7 +79,9 @@ namespace EmailAgent.Services
     public class OutlookService : IDisposable
     {
         private readonly AgentConfiguration _configuration;
+        private readonly KeyVaultService _keyVaultService;
         private readonly ILogger _logger;
+        private readonly string _emailAddress;
         private GraphServiceClient _graphClient = null!; // Initialized in constructor via InitializeGraphClient
         private readonly string[] _scopes = { "Mail.Read", "Mail.ReadWrite" };
         private bool _disposed = false;
@@ -88,13 +90,17 @@ namespace EmailAgent.Services
         /// Initializes a new instance of the OutlookService
         /// </summary>
         /// <param name="configuration">Agent configuration containing Outlook settings</param>
+        /// <param name="keyVaultService">Service for managing OAuth tokens in Azure Key Vault</param>
         /// <param name="logger">Logger for diagnostic information</param>
-        /// <exception cref="ArgumentNullException">Thrown when configuration or logger is null</exception>
+        /// <param name="emailAddress">Email address for this Outlook service instance</param>
+        /// <exception cref="ArgumentNullException">Thrown when configuration, keyVaultService, logger, or emailAddress is null</exception>
         /// <exception cref="ArgumentException">Thrown when required Outlook configuration values are missing</exception>
-        public OutlookService(AgentConfiguration configuration, ILogger logger)
+        public OutlookService(AgentConfiguration configuration, KeyVaultService keyVaultService, ILogger logger, string emailAddress)
         {
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+            _keyVaultService = keyVaultService ?? throw new ArgumentNullException(nameof(keyVaultService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _emailAddress = emailAddress ?? throw new ArgumentNullException(nameof(emailAddress));
 
             // Validate required configuration values
             if (string.IsNullOrWhiteSpace(_configuration.OutlookClientId))
@@ -104,8 +110,8 @@ namespace EmailAgent.Services
                 throw new ArgumentException("Outlook Secret is required", nameof(configuration));
 
             // Note: Graph client initialization is deferred to first use due to async requirements
-            _logger.LogInformation("Outlook Service initialized with Client ID: {ClientId}",
-                _configuration.OutlookClientId);
+            _logger.LogInformation("Outlook Service initialized with Client ID: {ClientId} for email: {EmailAddress}",
+                _configuration.OutlookClientId, _emailAddress);
         }
 
         /// <summary>
@@ -320,26 +326,11 @@ namespace EmailAgent.Services
         /// </summary>
         private async Task InitializeGraphClientAsync()
         {
-            _logger.LogDebug("Initializing GraphServiceClient with Client ID: {ClientId}", _configuration.OutlookClientId);
+            _logger.LogDebug("Initializing GraphServiceClient with Client ID: {ClientId} for email: {EmailAddress}",
+                _configuration.OutlookClientId, _emailAddress);
 
             try
             {
-                // Create token storage configuration
-                var tokenCacheDir = Path.Combine(Directory.GetCurrentDirectory(), "outlook_tokens");
-                Directory.CreateDirectory(tokenCacheDir);
-
-                // Configure storage properties with platform-specific settings for macOS
-                var storageProperties = new StorageCreationPropertiesBuilder(
-                    "outlook_token_cache.dat",
-                    tokenCacheDir)
-                    .WithMacKeyChain("EmailAgent.Outlook", "OutlookTokenCache") // Add keychain configuration for macOS
-                    .Build();
-
-                _logger.LogDebug("Using token cache directory: {TokenCacheDir}", tokenCacheDir);
-
-                // Create MsalCacheHelper for persistent token storage
-                var cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties);
-
                 // Create the public client application for delegated permissions
                 // Using "consumers" authority to support personal Microsoft accounts
                 var app = PublicClientApplicationBuilder
@@ -348,23 +339,27 @@ namespace EmailAgent.Services
                     .WithRedirectUri("http://localhost")
                     .Build();
 
-                // Register the token cache with the application
-                cacheHelper.RegisterCache(app.UserTokenCache);
+                // Set up Key Vault-based token cache
+                var keyVaultTokenCache = new KeyVaultTokenCache(_keyVaultService, _emailAddress, _logger);
 
-                _logger.LogDebug("Created PublicClientApplication with persistent token cache");
+                // Register Key Vault token cache callbacks with MSAL
+                app.UserTokenCache.SetBeforeAccess(keyVaultTokenCache.BeforeAccessNotification);
+                app.UserTokenCache.SetAfterAccess(keyVaultTokenCache.AfterAccessNotification);
+
+                _logger.LogDebug("Created PublicClientApplication with Azure Key Vault token cache for: {EmailAddress}", _emailAddress);
 
                 // Create a custom authentication provider that works with Microsoft Graph v5
                 var authProvider = new MSALAuthenticationProvider(app, _scopes, _logger);
 
                 _graphClient = new GraphServiceClient(authProvider);
 
-                _logger.LogInformation("Initialized GraphServiceClient with persistent token storage. Cache location: {TokenCacheDir}", tokenCacheDir);
+                _logger.LogInformation("Initialized GraphServiceClient with Azure Key Vault token storage for email: {EmailAddress}", _emailAddress);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to initialize GraphServiceClient with persistent token storage. Falling back to in-memory cache.");
+                _logger.LogError(ex, "Failed to initialize GraphServiceClient with Azure Key Vault token storage. Falling back to in-memory cache for email: {EmailAddress}", _emailAddress);
 
-                // Fallback to in-memory cache if persistent storage fails
+                // Fallback to in-memory cache if Key Vault storage fails
                 var app = PublicClientApplicationBuilder
                     .Create(_configuration.OutlookClientId)
                     .WithAuthority("https://login.microsoftonline.com/consumers")
@@ -374,7 +369,7 @@ namespace EmailAgent.Services
                 var authProvider = new MSALAuthenticationProvider(app, _scopes, _logger);
                 _graphClient = new GraphServiceClient(authProvider);
 
-                _logger.LogWarning("Using in-memory token cache. User may need to re-authenticate on each run.");
+                _logger.LogWarning("Using in-memory token cache for {EmailAddress}. User may need to re-authenticate on each run.", _emailAddress);
             }
         }
 

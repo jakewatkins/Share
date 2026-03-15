@@ -27,7 +27,7 @@ namespace testEmailServices
             try
             {
                 Console.WriteLine("Loading configuration...");
-                
+
                 // Initialize configuration loader
                 var agentConfig = new AgentConfiguration(_configuration);
                 Console.WriteLine("Configuration loaded successfully");
@@ -60,7 +60,7 @@ namespace testEmailServices
         private async Task TestOwaService(AgentConfiguration agentConfig, ILoggerFactory loggerFactory)
         {
             Console.WriteLine("Testing OWA Service...");
-            
+
             try
             {
                 var logger = loggerFactory.CreateLogger<OwaService>();
@@ -76,7 +76,7 @@ namespace testEmailServices
                 if (response.Success)
                 {
                     Console.WriteLine($"OWA Service: Retrieved {response.Emails.Count} emails");
-                    
+
                     foreach (var email in response.Emails)
                     {
                         Console.WriteLine($"{email.SentDateTime:yyyy-MM-dd HH:mm:ss} - {email.Service} - {email.From} - {email.Subject}");
@@ -96,7 +96,7 @@ namespace testEmailServices
         private async Task TestGmailService(AgentConfiguration agentConfig, ILoggerFactory loggerFactory)
         {
             Console.WriteLine("Testing Gmail Service...");
-            
+
             try
             {
                 var logger = loggerFactory.CreateLogger<GmailService>();
@@ -112,7 +112,7 @@ namespace testEmailServices
                 if (response.Success)
                 {
                     Console.WriteLine($"Gmail Service: Retrieved {response.Emails.Count} emails");
-                    
+
                     foreach (var email in response.Emails)
                     {
                         Console.WriteLine($"{email.SentDateTime:yyyy-MM-dd HH:mm:ss} - {email.Service} - {email.From} - {email.Subject}");
@@ -132,11 +132,18 @@ namespace testEmailServices
         private async Task TestOutlookService(AgentConfiguration agentConfig, ILoggerFactory loggerFactory)
         {
             Console.WriteLine("Testing Outlook Service...");
-            
+
             try
             {
+                // Create KeyVaultService for testing
+                var keyVaultLogger = loggerFactory.CreateLogger<KeyVaultService>();
+                var keyVaultService = new KeyVaultService(_configuration, keyVaultLogger);
+
+                // Get test email address from configuration or use default
+                var testEmailAddress = _configuration["testOutlookEmail"] ?? "test@outlook.com";
+
                 var logger = loggerFactory.CreateLogger<OutlookService>();
-                var outlookService = new OutlookService(agentConfig, logger);
+                var outlookService = new OutlookService(agentConfig, keyVaultService, logger, testEmailAddress);
 
                 var request = new GetEmailRequest
                 {
@@ -148,7 +155,7 @@ namespace testEmailServices
                 if (response.Success)
                 {
                     Console.WriteLine($"Outlook Service: Retrieved {response.Emails.Count} emails");
-                    
+
                     foreach (var email in response.Emails)
                     {
                         Console.WriteLine($"{email.SentDateTime:yyyy-MM-dd HH:mm:ss} - {email.Service} - {email.From} - {email.Subject}");
@@ -185,7 +192,7 @@ namespace testEmailServices
         private async Task TestBackwardCompatibility(AgentConfiguration agentConfig, ILoggerFactory loggerFactory)
         {
             Console.WriteLine("Testing Backward Compatibility (should default to Inbox)...");
-            
+
             try
             {
                 var logger = loggerFactory.CreateLogger<OwaService>();
@@ -198,7 +205,7 @@ namespace testEmailServices
                 };
 
                 Console.WriteLine($"Request folder: {(request.Folder == null ? "null (should default to Inbox)" : request.Folder.ToString())}");
-                
+
                 var response = await owaService.GetEmail(request);
 
                 if (response.Success)
@@ -219,7 +226,7 @@ namespace testEmailServices
         private async Task TestExplicitFolders(AgentConfiguration agentConfig, ILoggerFactory loggerFactory)
         {
             Console.WriteLine("Testing Explicit Folder Specification...");
-            
+
             try
             {
                 var logger = loggerFactory.CreateLogger<OwaService>();
@@ -274,28 +281,28 @@ namespace testEmailServices
         private void TestEmailFolderFactoryMethods()
         {
             Console.WriteLine("Testing EmailFolder Factory Methods...");
-            
+
             try
             {
                 // Test factory methods for all services
                 var services = new[] { EmailService.Gmail, EmailService.Outlook, EmailService.OWA };
-                
+
                 foreach (var service in services)
                 {
                     Console.WriteLine($"  Testing {service} factory methods:");
-                    
+
                     var inbox = EmailFolder.CreateInboxFolder(service);
                     Console.WriteLine($"    Inbox: {inbox} (ServiceSpecificId: {inbox.ServiceSpecificId})");
-                    
+
                     var spam = EmailFolder.CreateSpamFolder(service);
                     Console.WriteLine($"    Spam: {spam} (ServiceSpecificId: {spam.ServiceSpecificId})");
-                    
+
                     var sent = EmailFolder.CreateSentFolder(service);
                     Console.WriteLine($"    Sent: {sent} (ServiceSpecificId: {sent.ServiceSpecificId})");
-                    
+
                     var drafts = EmailFolder.CreateDraftsFolder(service);
                     Console.WriteLine($"    Drafts: {drafts} (ServiceSpecificId: {drafts.ServiceSpecificId})");
-                    
+
                     var trash = EmailFolder.CreateTrashFolder(service);
                     Console.WriteLine($"    Trash: {trash} (ServiceSpecificId: {trash.ServiceSpecificId})");
                     Console.WriteLine();
