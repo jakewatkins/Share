@@ -28,10 +28,15 @@ namespace emailServices.Tests
                 builder.SetMinimumLevel(LogLevel.Debug);
             });
 
-            // Initialize OutlookService
+            // Initialize KeyVaultService for testing
+            var keyVaultLogger = _loggerFactory.CreateLogger<KeyVaultService>();
+            var keyVaultService = new KeyVaultService(_configuration, keyVaultLogger);
+
+            // Initialize OutlookService with test email address
             var agentConfig = new AgentConfiguration(_configuration);
             var logger = _loggerFactory.CreateLogger<OutlookService>();
-            _outlookService = new OutlookService(agentConfig, logger);
+            var testEmailAddress = "test@outlook.com";
+            _outlookService = new OutlookService(agentConfig, keyVaultService, logger, testEmailAddress);
         }
 
         [Fact]
@@ -58,9 +63,9 @@ namespace emailServices.Tests
             Assert.True(response.Success, $"GetEmail should succeed. Message: {response.Message}");
             Assert.NotNull(response.Emails);
             Assert.True(response.Emails.Count > 0, "Should return at least one email from Recruiters folder");
-            
+
             // Verify all emails are from the Outlook service
-            Assert.All(response.Emails, email => 
+            Assert.All(response.Emails, email =>
                 Assert.Equal(EmailService.Outlook, email.Service));
 
             // Log results for inspection
@@ -94,7 +99,7 @@ namespace emailServices.Tests
             // Assert
             Assert.True(response.Success, $"GetEmail should succeed. Message: {response.Message}");
             Assert.NotNull(response.Emails);
-            Assert.True(response.Emails.Count <= requestedCount, 
+            Assert.True(response.Emails.Count <= requestedCount,
                 $"Should return at most {requestedCount} emails, but got {response.Emails.Count}");
         }
 
@@ -121,17 +126,17 @@ namespace emailServices.Tests
             // Assert
             Assert.True(response.Success);
             Assert.NotNull(response.Emails);
-            
+
             if (response.Emails.Count > 0)
             {
                 var email = response.Emails[0];
-                
+
                 // Verify essential properties are populated
                 Assert.NotNull(email.Subject);
                 Assert.NotNull(email.From);
                 Assert.NotEqual(default(DateTime), email.SentDateTime);
                 Assert.Equal(EmailService.Outlook, email.Service);
-                
+
                 // Body might be null or empty, but should be a string
                 Assert.NotNull(email.Body);
             }

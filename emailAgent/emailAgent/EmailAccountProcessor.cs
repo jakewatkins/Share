@@ -4,6 +4,7 @@ using EmailAgent.Core;
 using EmailAgent.Entities;
 using EmailAgent.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 
 namespace EmailAgent;
 
@@ -16,78 +17,102 @@ class EmailAccountProcessor
         Owa
     }
 
-    private readonly AgentConfiguration _config;
+    private readonly IConfiguration _configuration;
+    private readonly KeyVaultService _keyVaultService;
     private readonly ILogger<EmailAccountProcessor> _logger;
+    private readonly ILoggerFactory _loggerFactory;
 
-    public EmailAccountProcessor(AgentConfiguration config, ILogger<EmailAccountProcessor> logger)
+    public EmailAccountProcessor(IConfiguration configuration, KeyVaultService keyVaultService, ILoggerFactory loggerFactory)
     {
-        _config = config;
-        _logger = logger;
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+        _keyVaultService = keyVaultService ?? throw new ArgumentNullException(nameof(keyVaultService));
+        _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+        _logger = _loggerFactory.CreateLogger<EmailAccountProcessor>();
     }
 
     private async Task<List<Email>> GetOutlookEmails(EmailAccount account)
     {
         _logger.LogInformation("Retrieving emails for Outlook account: {Mailbox}", account.Mailbox);
-        // Implementation for retrieving Outlook emails goes here
-        var outlookService = new OutlookService(_config, _logger);
-        var emailRequest = new GetEmailRequest
-        {
-            StartIndex = 0,
-            NumberOfEmails = 500,
-            Folder = new EmailFolder("Inbox", FolderType.Inbox, EmailAgent.Entities.EmailService.Outlook)
-        };
-        var emails = await outlookService.GetEmail(emailRequest);
 
-        var resultEmails = new List<Email>();
-        var moreEmails = true;
-
-        while (moreEmails)
+        try
         {
-            var fetchedEmails = await outlookService.GetEmail(emailRequest);
-            if (fetchedEmails.Count == 0)
+            // Create AgentConfiguration and OutlookService with Key Vault support
+            var agentConfiguration = new AgentConfiguration(_configuration);
+            var outlookService = new OutlookService(agentConfiguration, _keyVaultService, _logger, account.Mailbox);
+
+            var emailRequest = new GetEmailRequest
             {
-                moreEmails = false;
-            }
-            else
+                StartIndex = 0,
+                NumberOfEmails = 500,
+                Folder = new EmailFolder("Inbox", FolderType.Inbox, EmailAgent.Entities.EmailService.Outlook)
+            };
+            var emails = await outlookService.GetEmail(emailRequest);
+
+            var resultEmails = new List<Email>();
+            var moreEmails = true;
+
+            while (moreEmails)
             {
-                resultEmails.AddRange(fetchedEmails.Emails);
-                emailRequest.StartIndex += fetchedEmails.Count;
+                var fetchedEmails = await outlookService.GetEmail(emailRequest);
+                if (fetchedEmails.Count == 0)
+                {
+                    moreEmails = false;
+                }
+                else
+                {
+                    resultEmails.AddRange(fetchedEmails.Emails);
+                    emailRequest.StartIndex += fetchedEmails.Count;
+                }
             }
+
+            return resultEmails;
         }
-
-        return resultEmails;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to retrieve Outlook emails for account: {Mailbox}", account.Mailbox);
+            throw;
+        }
     }
 
     private async Task<List<Email>> GetGMailEmails(EmailAccount account)
     {
-        _config.GoogleId = account.Mailbox;
+        _logger.LogInformation("Retrieving emails for Gmail account: {Mailbox}", account.Mailbox);
 
-        var gmailService = new GmailService(_config, Program.GetLogger<GmailService>());
-
-        var request = new GetEmailRequest
+        try
         {
-            StartIndex = 0,
-            NumberOfEmails = 500
-        };
+            var gmailLogger = _loggerFactory.CreateLogger<GmailService>();
+            var gmailService = new GmailService(_configuration, _keyVaultService, gmailLogger, account.Mailbox);
 
-        var moreEmails = true;
-        var resultEmails = new List<Email>();
-        while (moreEmails)
-        {
-            var response = await gmailService.GetEmail(request);
-            if (0 == response.Count)
+            var request = new GetEmailRequest
             {
-                moreEmails = false;
+                StartIndex = 0,
+                NumberOfEmails = 500
+            };
+
+            var moreEmails = true;
+            var resultEmails = new List<Email>();
+            while (moreEmails)
+            {
+                var response = await gmailService.GetEmail(request);
+                if (0 == response.Count)
+                {
+                    moreEmails = false;
+                }
+
+                if (0 != response.Emails.Count)
+                {
+                    resultEmails.AddRange(response.Emails);
+                    request.StartIndex += response.Count;
+                }
             }
 
-            if (0 != response.Emails.Count)
-            {
-                resultEmails.AddRange(response.Emails);
-                request.StartIndex += response.Count;
-            }
+            return resultEmails;
         }
-
-        return resultEmails;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to retrieve Gmail emails for account: {Mailbox}", account.Mailbox);
+            throw;
+        }
     }
     private EmailService GetEmailService(string accountType)
     {

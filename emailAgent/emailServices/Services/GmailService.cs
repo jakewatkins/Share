@@ -1,4 +1,3 @@
-using EmailAgent.Core;
 using EmailAgent.Entities;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Gmail.v1;
@@ -6,37 +5,39 @@ using Google.Apis.Gmail.v1.Data;
 using Google.Apis.Services;
 using Google.Apis.Util.Store;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using System.Text;
+using System.Text.Json;
 
 namespace EmailAgent.Services
 {
     public class GmailService : IDisposable
     {
-        private readonly AgentConfiguration _configuration;
-        private readonly ILogger _logger;
+        private readonly IConfiguration _configuration;
+        private readonly KeyVaultService _keyVaultService;
+        private readonly ILogger<GmailService> _logger;
+        private readonly string _emailAddress;
         private Google.Apis.Gmail.v1.GmailService? _gmailService;
         private DateTime _lastApiCall = DateTime.MinValue;
         private const int RATE_LIMIT_DELAY_MS = 100; // Minimum delay between API calls
         private bool _disposed = false;
 
-        public GmailService(AgentConfiguration configuration, ILogger<GmailService> logger)
+        // Cache for OAuth configuration values
+        private string? _googleClientId;
+        private string? _googleClientSecret;
+
+        public GmailService(IConfiguration configuration, KeyVaultService keyVaultService, ILogger<GmailService> logger, string emailAddress)
         {
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+            _keyVaultService = keyVaultService ?? throw new ArgumentNullException(nameof(keyVaultService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _emailAddress = emailAddress ?? throw new ArgumentNullException(nameof(emailAddress));
 
-            // Validate required configuration values
-            if (string.IsNullOrWhiteSpace(_configuration.GoogleId))
-                throw new ArgumentException("GoogleId is required for Gmail service");
-            if (string.IsNullOrWhiteSpace(_configuration.GoogleClientId))
-                throw new ArgumentException("GoogleClientId is required for Gmail service");
-            if (string.IsNullOrWhiteSpace(_configuration.GoogleClientSecret))
-                throw new ArgumentException("GoogleClientSecret is required for Gmail service");
-
-            _logger.LogInformation("Gmail Service initialized for email: {EmailAddress}", _configuration.GoogleId);
+            _logger.LogInformation("Gmail Service initialized for: {EmailAddress}", _emailAddress);
         }
 
         /// <summary>
-        /// Ensures the Gmail service connection is ready and available
+        /// Ensures the Gmail service connection is ready and available for the configured email address
         /// </summary>
         /// <returns>The configured Gmail service instance</returns>
         /// <exception cref="InvalidOperationException">Thrown when service is disposed or connection failed</exception>
@@ -92,15 +93,15 @@ namespace EmailAgent.Services
         public async Task<GetEmailResponse> GetEmail(GetEmailRequest request)
         {
             var response = new GetEmailResponse();
-            
+
             try
             {
-                _logger.LogInformation("Starting GetEmail request: NumberOfEmails={NumberOfEmails}", request.NumberOfEmails);
+                _logger.LogInformation("Starting GetEmail request for {EmailAddress}: NumberOfEmails={NumberOfEmails}", _emailAddress, request.NumberOfEmails);
 
                 // Get the effective folder (defaults to Inbox if no folder specified)
                 var targetFolder = request.GetEffectiveFolder(EmailService.Gmail);
-                _logger.LogDebug("Retrieving emails from folder: {FolderName} ({FolderType})", 
-                    targetFolder.FolderName, targetFolder.FolderType);
+                _logger.LogDebug("Retrieving emails from folder: {FolderName} ({FolderType}) for {EmailAddress}",
+                    targetFolder.FolderName, targetFolder.FolderType, _emailAddress);
 
                 // Ensure Gmail service connection is available
                 var gmailService = await EnsureConnection();
@@ -154,7 +155,7 @@ namespace EmailAgent.Services
             // Validate that the email entity has a service type of Gmail
             if (email.Service != EmailService.Gmail)
             {
-                _logger.LogWarning("Validation failure: Email ID {EmailId} has wrong service type {ServiceType}, expected Gmail", 
+                _logger.LogWarning("Validation failure: Email ID {EmailId} has wrong service type {ServiceType}, expected Gmail",
                     email.Id, email.Service);
                 return false;
             }
@@ -191,40 +192,45 @@ namespace EmailAgent.Services
             catch (Exception ex)
             {
                 // If the Gmail service returns any other error or exception, log the email's id and the error details and then return false
-                _logger.LogWarning(ex, "Failed to delete email ID {EmailId}. Error details: {ErrorMessage}", 
+                _logger.LogWarning(ex, "Failed to delete email ID {EmailId}. Error details: {ErrorMessage}",
                     email.Id, ex.Message);
                 return false;
             }
         }
 
         /// <summary>
-        /// Initializes the Gmail service with OAuth2 authentication and persistent token storage
-        /// The first run will require interactive authentication, subsequent runs will use stored tokens
+        /// Initializes the Gmail service with OAuth2 authentication and Key Vault token storage
+        /// The first run will require interactive authentication, subsequent runs will use tokens from Key Vault
+        /// Also handles migration from local file-based tokens if they exist
         /// </summary>
         private async Task InitializeGmailService()
         {
             try
             {
-                _logger.LogInformation("Initializing Gmail service authentication");
+                _logger.LogInformation("Initializing Gmail service authentication for: {EmailAddress}", _emailAddress);
 
-                // Create file-based token store for persistent authentication
-                // This storage location matches the pattern used in outlookAgent for consistency
-                var tokenStorePath = Path.Combine(Directory.GetCurrentDirectory(), "gmail_tokens");
-                var dataStore = new FileDataStore(tokenStorePath, true);
+                // Load OAuth configuration from Key Vault
+                await LoadOAuthConfiguration();
 
-                _logger.LogDebug("Using token storage path: {TokenStorePath}", tokenStorePath);
+                // Create Key Vault-based token store
+                var dataStore = new KeyVaultDataStore(_keyVaultService, _emailAddress, _logger);
 
-                // Use GoogleWebAuthorizationBroker with persistent storage
+                // Check for existing local tokens and migrate them if found
+                await MigrateLocalTokensIfExists(dataStore);
+
+                _logger.LogDebug("Using Key Vault token storage for email: {EmailAddress}", _emailAddress);
+
+                // Use GoogleWebAuthorizationBroker with Key Vault storage
                 var userCredential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
                     new ClientSecrets
                     {
-                        ClientId = _configuration.GoogleClientId,
-                        ClientSecret = _configuration.GoogleClientSecret
+                        ClientId = _googleClientId!,
+                        ClientSecret = _googleClientSecret!
                     },
                     new[] { Google.Apis.Gmail.v1.GmailService.Scope.GmailModify },
-                    _configuration.GoogleId, // Using as user ID (email address)
+                    _emailAddress, // Using email address as user ID
                     CancellationToken.None,
-                    dataStore); // This enables persistent token storage
+                    dataStore); // This enables Key Vault token storage
 
                 // Create Gmail service
                 _gmailService = new Google.Apis.Gmail.v1.GmailService(new BaseClientService.Initializer
@@ -233,34 +239,98 @@ namespace EmailAgent.Services
                     ApplicationName = "EmailAgent Gmail Service"
                 });
 
-                _logger.LogInformation("Gmail service initialized successfully. Tokens stored at: {TokenStorePath}", tokenStorePath);
+                _logger.LogInformation("Gmail service initialized successfully for: {EmailAddress}", _emailAddress);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to initialize Gmail service");
-                throw new InvalidOperationException("Failed to authenticate with Gmail service", ex);
+                _logger.LogError(ex, "Failed to initialize Gmail service for: {EmailAddress}", _emailAddress);
+                throw new InvalidOperationException($"Failed to authenticate with Gmail service for {_emailAddress}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Loads OAuth configuration from Key Vault
+        /// </summary>
+        private async Task LoadOAuthConfiguration()
+        {
+            if (_googleClientId == null)
+            {
+                _googleClientId = await _keyVaultService.GetSecretAsync("googleClientId");
+                if (string.IsNullOrWhiteSpace(_googleClientId))
+                    throw new InvalidOperationException("googleClientId secret not found in Key Vault");
+            }
+
+            if (_googleClientSecret == null)
+            {
+                _googleClientSecret = await _keyVaultService.GetSecretAsync("googleClientSecret");
+                if (string.IsNullOrWhiteSpace(_googleClientSecret))
+                    throw new InvalidOperationException("googleClientSecret secret not found in Key Vault");
+            }
+
+            _logger.LogDebug("OAuth configuration loaded from Key Vault");
+        }
+
+        /// <summary>
+        /// Migrates existing local tokens to Key Vault if they exist
+        /// </summary>
+        /// <param name="keyVaultDataStore">The Key Vault data store</param>
+        private async Task MigrateLocalTokensIfExists(KeyVaultDataStore keyVaultDataStore)
+        {
+            try
+            {
+                var tokenStorePath = Path.Combine(Directory.GetCurrentDirectory(), "gmail_tokens");
+                var localDataStore = new FileDataStore(tokenStorePath, true);
+
+                // Check if token already exists in Key Vault
+                var existingToken = await _keyVaultService.GetGmailTokenAsync(_emailAddress);
+                if (!string.IsNullOrEmpty(existingToken))
+                {
+                    _logger.LogDebug("Token already exists in Key Vault for: {EmailAddress}", _emailAddress);
+                    return;
+                }
+
+                // Check if local token exists
+                var token = await localDataStore.GetAsync<Google.Apis.Auth.OAuth2.Responses.TokenResponse>(_emailAddress);
+                if (token != null)
+                {
+                    _logger.LogInformation("Migrating local Gmail token to Key Vault for: {EmailAddress}", _emailAddress);
+
+                    // Store in Key Vault
+                    await keyVaultDataStore.StoreAsync(_emailAddress, token);
+
+                    _logger.LogInformation("Successfully migrated Gmail token from local storage to Key Vault for: {EmailAddress}", _emailAddress);
+                }
+                else
+                {
+                    _logger.LogDebug("No local Gmail token found for migration for: {EmailAddress}", _emailAddress);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log warning but don't fail the authentication process
+                _logger.LogWarning(ex, "Failed to migrate local Gmail tokens for: {EmailAddress}. Will proceed with Key Vault storage.", _emailAddress);
             }
         }
 
         private async Task<List<Message>> GetFolderMessages(Google.Apis.Gmail.v1.GmailService gmailService, EmailFolder folder, int numberOfEmails)
         {
-            _logger.LogInformation("Getting messages from folder {FolderName}: NumberOfEmails={NumberOfEmails}", 
+            _logger.LogInformation("Getting messages from folder {FolderName}: NumberOfEmails={NumberOfEmails}",
                 folder.FolderName, numberOfEmails);
 
             var messages = new List<Message>();
-            
+
             // Get Gmail query string for the folder
             var queryString = GetGmailQueryFromEmailFolder(folder);
             _logger.LogDebug("Using Gmail query: {Query}", queryString);
-            
+
             // Get message IDs from the specified folder
             var request = gmailService.Users.Messages.List("me");
             request.Q = queryString;
             request.MaxResults = numberOfEmails;
-            
+
             await RateLimitDelay();
             var response = await request.ExecuteAsync();
-            
+
             if (response.Messages == null || response.Messages.Count == 0)
             {
                 _logger.LogInformation("No messages found in folder {FolderName}", folder.FolderName);
@@ -271,13 +341,13 @@ namespace EmailAgent.Services
 
             // Get full message details for each message (retrieve oldest first)
             var messageIds = response.Messages.OrderBy(m => m.Id).Take(numberOfEmails).ToList();
-            
+
             foreach (var messageId in messageIds)
             {
                 await RateLimitDelay();
                 var messageRequest = gmailService.Users.Messages.Get("me", messageId.Id);
                 messageRequest.Format = UsersResource.MessagesResource.GetRequest.FormatEnum.Full;
-                
+
                 var message = await messageRequest.ExecuteAsync();
                 messages.Add(message);
             }
@@ -329,7 +399,7 @@ namespace EmailAgent.Services
             if (gmailMessage.Payload != null)
             {
                 var bodyContent = await ParseMessagePart(gmailMessage.Payload, email, gmailMessage.Id!);
-                
+
                 // Favor HTML body over plain text
                 email.Body = !string.IsNullOrWhiteSpace(bodyContent.HtmlBody) ? bodyContent.HtmlBody : bodyContent.PlainBody;
             }
@@ -341,7 +411,7 @@ namespace EmailAgent.Services
         {
             string htmlBody = string.Empty;
             string plainBody = string.Empty;
-            
+
             if (part.Parts != null && part.Parts.Count > 0)
             {
                 // Multipart message
@@ -358,7 +428,7 @@ namespace EmailAgent.Services
             {
                 // Single part
                 var mimeType = part.MimeType?.ToLowerInvariant();
-                
+
                 if (mimeType == "text/plain")
                 {
                     plainBody = GetMessagePartContent(part);
@@ -377,7 +447,7 @@ namespace EmailAgent.Services
                     }
                 }
             }
-            
+
             return (htmlBody, plainBody);
         }
 
@@ -409,7 +479,7 @@ namespace EmailAgent.Services
                     Size = part.Body?.Size ?? 0
                 };
 
-                _logger.LogDebug("Created attachment metadata: Name={Name}, Type={Type}, Size={Size}", 
+                _logger.LogDebug("Created attachment metadata: Name={Name}, Type={Type}, Size={Size}",
                     attachment.Name, attachment.Type, attachment.Size);
 
                 return attachment;
@@ -425,12 +495,12 @@ namespace EmailAgent.Services
         {
             var timeSinceLastCall = DateTime.Now - _lastApiCall;
             var remainingDelay = TimeSpan.FromMilliseconds(RATE_LIMIT_DELAY_MS) - timeSinceLastCall;
-            
+
             if (remainingDelay > TimeSpan.Zero)
             {
                 await Task.Delay(remainingDelay);
             }
-            
+
             _lastApiCall = DateTime.Now;
         }
 

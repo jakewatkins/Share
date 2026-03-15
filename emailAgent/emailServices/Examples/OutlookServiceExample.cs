@@ -32,9 +32,17 @@ public class OutlookServiceExample
             var agentConfig = new AgentConfiguration(configuration);
             logger.LogInformation("AgentConfiguration initialized successfully");
 
+            // Initialize KeyVault service
+            var keyVaultLogger = loggerFactory.CreateLogger<KeyVaultService>();
+            var keyVaultService = new KeyVaultService(configuration, keyVaultLogger);
+            logger.LogInformation("KeyVaultService initialized successfully");
+
+            // Get test email address from configuration or use default
+            var emailAddress = configuration["testOutlookEmail"] ?? "test@outlook.com";
+
             // Initialize Outlook service
-            var outlookService = new OutlookService(agentConfig, logger);
-            logger.LogInformation("OutlookService initialized successfully");
+            var outlookService = new OutlookService(agentConfig, keyVaultService, logger, emailAddress);
+            logger.LogInformation("OutlookService initialized successfully for: {EmailAddress}", emailAddress);
 
             // Create email request
             var request = new GetEmailRequest
@@ -61,13 +69,13 @@ public class OutlookServiceExample
                     Console.WriteLine($"Subject: {email.Subject}");
                     Console.WriteLine($"Sent: {email.SentDateTime:yyyy-MM-dd HH:mm:ss}");
                     Console.WriteLine($"To: {string.Join(", ", email.To)}");
-                    
+
                     if (email.CC.Any())
                         Console.WriteLine($"CC: {string.Join(", ", email.CC)}");
-                    
+
                     if (email.BCC.Any())
                         Console.WriteLine($"BCC: {string.Join(", ", email.BCC)}");
-                    
+
                     Console.WriteLine($"Body Length: {email.Body.Length} characters");
                     Console.WriteLine($"Attachments: {email.Attachments.Count}");
 
