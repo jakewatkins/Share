@@ -342,9 +342,11 @@ namespace EmailAgent.Services
                 // Set up Key Vault-based token cache
                 var keyVaultTokenCache = new KeyVaultTokenCache(_keyVaultService, _emailAddress, _logger);
 
-                // Register Key Vault token cache callbacks with MSAL
-                app.UserTokenCache.SetBeforeAccess(keyVaultTokenCache.BeforeAccessNotification);
-                app.UserTokenCache.SetAfterAccess(keyVaultTokenCache.AfterAccessNotification);
+                // Register Key Vault token cache callbacks with MSAL using the async API.
+                // SetBeforeAccessAsync / SetAfterAccessAsync accept Func<..., Task> so MSAL
+                // awaits completion before proceeding — critical for Key Vault I/O.
+                app.UserTokenCache.SetBeforeAccessAsync(keyVaultTokenCache.BeforeAccessNotification);
+                app.UserTokenCache.SetAfterAccessAsync(keyVaultTokenCache.AfterAccessNotification);
 
                 _logger.LogDebug("Created PublicClientApplication with Azure Key Vault token cache for: {EmailAddress}", _emailAddress);
 
