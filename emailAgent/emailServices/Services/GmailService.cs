@@ -227,7 +227,7 @@ namespace EmailAgent.Services
                         ClientId = _googleClientId!,
                         ClientSecret = _googleClientSecret!
                     },
-                    new[] { Google.Apis.Gmail.v1.GmailService.Scope.GmailModify },
+                    new[] { Google.Apis.Gmail.v1.GmailService.Scope.MailGoogleCom },
                     _emailAddress, // Using email address as user ID
                     CancellationToken.None,
                     dataStore); // This enables Key Vault token storage
