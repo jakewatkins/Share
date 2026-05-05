@@ -27,15 +27,18 @@ RUN dotnet publish "EmailServices.Api.csproj" -c Release -o /app/publish /p:UseA
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 
-# Create non-root user for security
+# Create non-root user and log directory
 RUN addgroup --system --gid 1001 emailapi && \
-    adduser --system --uid 1001 --ingroup emailapi emailapi
+    adduser --system --uid 1001 --ingroup emailapi emailapi && \
+    apt-get update && apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir /logs
 
 # Copy published application
 COPY --from=publish /app/publish .
 
 # Set ownership and permissions
-RUN chown -R emailapi:emailapi /app
+RUN chown -R emailapi:emailapi /app /logs
 USER emailapi
 
 # Configure environment

@@ -88,8 +88,8 @@ public class EmailOperationsServiceTests
         var exception = await Record.ExceptionAsync(async () =>
             await _emailService.DeleteEmailAsync(emailId, serviceName, userEmail));
 
-        // Should not throw argument validation errors for service name
-        exception.Should().NotBeOfType<ArgumentException>();
+        // Should not throw argument validation errors for service name (null = no exception = also fine)
+        exception?.Should().NotBeOfType<ArgumentException>();
     }
 
     [Fact]

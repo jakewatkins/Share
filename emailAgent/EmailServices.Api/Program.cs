@@ -42,6 +42,41 @@ app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.Health
 });
 
 // API endpoints
+app.MapGet("/api/v1/emails", async (
+    string service,
+    string userEmail,
+    int count,
+    IEmailOperationsService emailService,
+    ILogger<Program> logger) =>
+{
+    try
+    {
+        var correlationId = Guid.NewGuid().ToString();
+        logger.LogInformation("Processing get emails request for {Service}/{UserEmail} with correlation {CorrelationId}",
+            service, userEmail, correlationId);
+
+        var result = await emailService.GetEmailsAsync(service, userEmail, count > 0 ? count : 10);
+
+        return Results.Ok(new ApiResponse<object>(true, result));
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.Problem(
+            statusCode: 400,
+            title: "Invalid request",
+            detail: ex.Message);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error processing get emails request for {Service}/{UserEmail}", service, userEmail);
+        return Results.Problem(
+            statusCode: 500,
+            title: "Internal server error",
+            detail: "An error occurred while retrieving emails");
+    }
+})
+.WithName("GetEmails");
+
 app.MapDelete("/api/v1/emails/{emailId}", async (
     string emailId,
     string service,

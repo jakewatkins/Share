@@ -22,6 +22,34 @@ public class EmailOperationsService : IEmailOperationsService
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
     }
 
+    public async Task<GetEmailResponse> GetEmailsAsync(string service, string userEmail, int count = 10)
+    {
+        try
+        {
+            _logger.LogInformation("Retrieving {Count} emails from {Service} for user {UserEmail}", count, service, userEmail);
+
+            if (!Enum.TryParse<EmailService>(service, true, out var emailService))
+            {
+                _logger.LogError("Invalid email service specified: {Service}", service);
+                throw new ArgumentException($"Invalid email service: {service}", nameof(service));
+            }
+
+            var request = new GetEmailRequest(0, count);
+
+            return emailService switch
+            {
+                EmailService.Gmail => await GetGmailEmailsAsync(request, userEmail),
+                EmailService.Outlook => await GetOutlookEmailsAsync(request, userEmail),
+                _ => throw new NotSupportedException($"Email service {emailService} is not supported for retrieval")
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving emails from {Service} for user {UserEmail}", service, userEmail);
+            throw;
+        }
+    }
+
     public async Task<bool> DeleteEmailAsync(string emailId, string service, string userEmail)
     {
         try
@@ -97,6 +125,29 @@ public class EmailOperationsService : IEmailOperationsService
                 emailId, service, userEmail);
             throw;
         }
+    }
+
+    private async Task<GetEmailResponse> GetGmailEmailsAsync(GetEmailRequest request, string userEmail)
+    {
+        var keyVaultLogger = _loggerFactory.CreateLogger<KeyVaultService>();
+        var keyVaultService = new KeyVaultService(_configuration, keyVaultLogger);
+
+        var gmailLogger = _loggerFactory.CreateLogger<GmailService>();
+        using var gmailService = new GmailService(_configuration, keyVaultService, gmailLogger, userEmail);
+
+        return await gmailService.GetEmail(request);
+    }
+
+    private async Task<GetEmailResponse> GetOutlookEmailsAsync(GetEmailRequest request, string userEmail)
+    {
+        var agentConfig = new AgentConfiguration(_configuration);
+        var keyVaultLogger = _loggerFactory.CreateLogger<KeyVaultService>();
+        var keyVaultService = new KeyVaultService(_configuration, keyVaultLogger);
+
+        var outlookLogger = _loggerFactory.CreateLogger<OutlookService>();
+        using var outlookService = new OutlookService(agentConfig, keyVaultService, outlookLogger, userEmail);
+
+        return await outlookService.GetEmail(request);
     }
 
     private async Task<bool> DeleteGmailAsync(Email email, string userEmail)

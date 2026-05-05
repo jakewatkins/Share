@@ -1,4 +1,5 @@
 Release.txt
+.env
 appsettings.local.json
 appsettings.development.json
 backend.tfs
