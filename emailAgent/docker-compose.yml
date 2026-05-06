@@ -7,7 +7,7 @@ services:
   emailservices-api:
     build:
       context: .
-      dockerfile: EmailServices.Api/Dockerfile
+      image: jakewatkins/emailservices-api-dev:latest
       target: final
     container_name: emailservices-api-dev
     ports:
