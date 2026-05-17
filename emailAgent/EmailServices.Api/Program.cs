@@ -157,6 +157,44 @@ app.MapPut("/api/v1/emails/{emailId}/move", async (
 })
 .WithName("MoveEmail");
 
+app.MapPost("/api/v1/folders", async (
+    string service,
+    string userEmail,
+    string folderName,
+    IEmailOperationsService emailService,
+    ILogger<Program> logger) =>
+{
+    try
+    {
+        var correlationId = Guid.NewGuid().ToString();
+        logger.LogInformation("Processing create folder request for {Service}/{UserEmail} folder {FolderName} with correlation {CorrelationId}",
+            service, userEmail, folderName, correlationId);
+
+        var result = await emailService.CreateFolderAsync(service, userEmail, folderName);
+
+        if (result.Success)
+            return Results.Ok(new ApiResponse<object>(true, result));
+
+        return Results.Problem(
+            statusCode: 500,
+            title: "Folder creation failed",
+            detail: result.Message);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.Problem(statusCode: 400, title: "Invalid request", detail: ex.Message);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error creating folder for {Service}/{UserEmail}", service, userEmail);
+        return Results.Problem(
+            statusCode: 500,
+            title: "Internal server error",
+            detail: "An error occurred while creating the folder");
+    }
+})
+.WithName("CreateFolder");
+
 app.Run();
 
 // Make the implicit Program class public so integration tests can access it

@@ -89,15 +89,11 @@ public class ApiIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
-    public async Task MoveEmail_WithGmailService_ShouldReturnNotImplemented()
+    public async Task MoveEmail_WithGmailService_ShouldAttemptOperation()
     {
-        // Act
+        // Move is now implemented — without live credentials the service returns 500
         var response = await _client.PutAsync("/api/v1/emails/test-id/move?service=Gmail&userEmail=test@gmail.com&folder=TestFolder", null);
 
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.NotImplemented);
-
-        var content = await response.Content.ReadAsStringAsync();
-        content.Should().Contain("Move operation for Gmail is not yet implemented");
+        response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
     }
 }

@@ -517,6 +517,83 @@ namespace EmailAgent.Services
                 .ToList();
         }
 
+        public async Task<CreateFolderResponse> CreateFolder(string folderName)
+        {
+            if (string.IsNullOrWhiteSpace(folderName))
+                throw new ArgumentException("Folder name cannot be empty", nameof(folderName));
+
+            try
+            {
+                _logger.LogInformation("Creating Gmail label {FolderName} for {EmailAddress}", folderName, _emailAddress);
+
+                var gmailService = await EnsureConnection();
+                var label = new Label { Name = folderName };
+
+                await RateLimitDelay();
+                var created = await gmailService.Users.Labels.Create(label, "me").ExecuteAsync();
+
+                _logger.LogInformation("Successfully created Gmail label {LabelName} with ID {LabelId}", created.Name, created.Id);
+                return new CreateFolderResponse
+                {
+                    Success = true,
+                    FolderName = created.Name ?? folderName,
+                    ServiceSpecificId = created.Id,
+                    Service = EmailService.Gmail
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating Gmail label {FolderName}", folderName);
+                return new CreateFolderResponse { Success = false, Message = ex.Message, Service = EmailService.Gmail };
+            }
+        }
+
+        public async Task<bool> MoveEmailToFolder(string emailId, string destinationFolder)
+        {
+            if (string.IsNullOrWhiteSpace(emailId))
+                throw new ArgumentException("Email ID cannot be empty", nameof(emailId));
+            if (string.IsNullOrWhiteSpace(destinationFolder))
+                throw new ArgumentException("Destination folder cannot be empty", nameof(destinationFolder));
+
+            try
+            {
+                _logger.LogInformation("Moving email {EmailId} to folder {Folder} for {EmailAddress}", emailId, destinationFolder, _emailAddress);
+
+                var gmailService = await EnsureConnection();
+
+                // Find the label by ID or name
+                await RateLimitDelay();
+                var labelsResponse = await gmailService.Users.Labels.List("me").ExecuteAsync();
+
+                var targetLabel = labelsResponse.Labels?.FirstOrDefault(l =>
+                    l.Id == destinationFolder ||
+                    string.Equals(l.Name, destinationFolder, StringComparison.OrdinalIgnoreCase));
+
+                if (targetLabel == null)
+                {
+                    _logger.LogWarning("Gmail label {Folder} not found for {EmailAddress}", destinationFolder, _emailAddress);
+                    return false;
+                }
+
+                var modifyRequest = new ModifyMessageRequest
+                {
+                    AddLabelIds = new List<string> { targetLabel.Id },
+                    RemoveLabelIds = new List<string> { "INBOX" }
+                };
+
+                await RateLimitDelay();
+                await gmailService.Users.Messages.Modify(modifyRequest, "me", emailId).ExecuteAsync();
+
+                _logger.LogInformation("Successfully moved email {EmailId} to label {LabelName}", emailId, targetLabel.Name);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error moving email {EmailId} to folder {Folder}", emailId, destinationFolder);
+                return false;
+            }
+        }
+
         /// <summary>
         /// Releases all resources used by the GmailService
         /// </summary>

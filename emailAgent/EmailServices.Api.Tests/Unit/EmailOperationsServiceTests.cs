@@ -44,31 +44,21 @@ public class EmailOperationsServiceTests
     }
 
     [Fact]
-    public async Task MoveEmailAsync_WithGmail_ShouldThrowNotImplementedException()
+    public async Task MoveEmailAsync_WithInvalidService_ShouldThrowArgumentException()
     {
-        // Arrange
-        var emailId = "test-email-id";
-        var service = "Gmail";
-        var userEmail = "test@gmail.com";
-        var folder = "TestFolder";
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await _emailService.MoveEmailAsync("test-id", "InvalidService", "test@example.com", "TestFolder"));
 
-        // Act & Assert
-        await Assert.ThrowsAsync<NotImplementedException>(async () =>
-            await _emailService.MoveEmailAsync(emailId, service, userEmail, folder));
+        exception.Message.Should().Contain("Invalid email service");
     }
 
     [Fact]
-    public async Task MoveEmailAsync_WithOutlook_ShouldThrowNotImplementedException()
+    public async Task CreateFolderAsync_WithInvalidService_ShouldThrowArgumentException()
     {
-        // Arrange
-        var emailId = "test-email-id";
-        var service = "Outlook";
-        var userEmail = "test@outlook.com";
-        var folder = "TestFolder";
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await _emailService.CreateFolderAsync("InvalidService", "test@example.com", "TestFolder"));
 
-        // Act & Assert
-        await Assert.ThrowsAsync<NotImplementedException>(async () =>
-            await _emailService.MoveEmailAsync(emailId, service, userEmail, folder));
+        exception.Message.Should().Contain("Invalid email service");
     }
 
     [Theory]

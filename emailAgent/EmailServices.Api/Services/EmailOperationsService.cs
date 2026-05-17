@@ -179,17 +179,62 @@ public class EmailOperationsService : IEmailOperationsService
 
     private async Task<bool> MoveGmailAsync(string emailId, string userEmail, string destinationLabel)
     {
-        // TODO: Implement Gmail move functionality using labels
-        // Gmail doesn't have folders - uses labels for organization
-        _logger.LogWarning("Gmail move operation not yet implemented for email {EmailId}", emailId);
-        throw new NotImplementedException("Gmail move operation is not yet implemented");
+        var keyVaultLogger = _loggerFactory.CreateLogger<KeyVaultService>();
+        var keyVaultService = new KeyVaultService(_configuration, keyVaultLogger);
+        var gmailLogger = _loggerFactory.CreateLogger<GmailService>();
+        using var gmailService = new GmailService(_configuration, keyVaultService, gmailLogger, userEmail);
+        return await gmailService.MoveEmailToFolder(emailId, destinationLabel);
     }
 
     private async Task<bool> MoveOutlookAsync(string emailId, string userEmail, string destinationFolder)
     {
-        // TODO: Implement Outlook move functionality using Microsoft Graph API
-        // Move to specified folder by ID or name
-        _logger.LogWarning("Outlook move operation not yet implemented for email {EmailId}", emailId);
-        throw new NotImplementedException("Outlook move operation is not yet implemented");
+        var agentConfig = new AgentConfiguration(_configuration);
+        var keyVaultLogger = _loggerFactory.CreateLogger<KeyVaultService>();
+        var keyVaultService = new KeyVaultService(_configuration, keyVaultLogger);
+        var outlookLogger = _loggerFactory.CreateLogger<OutlookService>();
+        using var outlookService = new OutlookService(agentConfig, keyVaultService, outlookLogger, userEmail);
+        return await outlookService.MoveEmailToFolder(emailId, destinationFolder);
+    }
+
+    public async Task<CreateFolderResponse> CreateFolderAsync(string service, string userEmail, string folderName)
+    {
+        try
+        {
+            _logger.LogInformation("Creating folder {FolderName} in {Service} for user {UserEmail}", folderName, service, userEmail);
+
+            if (!Enum.TryParse<EmailService>(service, true, out var emailService))
+                throw new ArgumentException($"Invalid email service: {service}", nameof(service));
+
+            return emailService switch
+            {
+                EmailService.Gmail => await CreateGmailFolderAsync(userEmail, folderName),
+                EmailService.Outlook => await CreateOutlookFolderAsync(userEmail, folderName),
+                _ => throw new NotSupportedException($"Email service {emailService} is not supported for folder creation")
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating folder {FolderName} in {Service} for user {UserEmail}", folderName, service, userEmail);
+            throw;
+        }
+    }
+
+    private async Task<CreateFolderResponse> CreateGmailFolderAsync(string userEmail, string folderName)
+    {
+        var keyVaultLogger = _loggerFactory.CreateLogger<KeyVaultService>();
+        var keyVaultService = new KeyVaultService(_configuration, keyVaultLogger);
+        var gmailLogger = _loggerFactory.CreateLogger<GmailService>();
+        using var gmailService = new GmailService(_configuration, keyVaultService, gmailLogger, userEmail);
+        return await gmailService.CreateFolder(folderName);
+    }
+
+    private async Task<CreateFolderResponse> CreateOutlookFolderAsync(string userEmail, string folderName)
+    {
+        var agentConfig = new AgentConfiguration(_configuration);
+        var keyVaultLogger = _loggerFactory.CreateLogger<KeyVaultService>();
+        var keyVaultService = new KeyVaultService(_configuration, keyVaultLogger);
+        var outlookLogger = _loggerFactory.CreateLogger<OutlookService>();
+        using var outlookService = new OutlookService(agentConfig, keyVaultService, outlookLogger, userEmail);
+        return await outlookService.CreateFolder(folderName);
     }
 }
