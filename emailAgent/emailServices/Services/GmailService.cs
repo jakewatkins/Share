@@ -126,6 +126,14 @@ namespace EmailAgent.Services
                 _logger.LogInformation("Successfully retrieved {EmailCount} emails", response.Emails.Count);
                 response.Success = true;
             }
+            catch (Google.Apis.Auth.OAuth2.Responses.TokenResponseException ex) when (ex.Error?.Error == "invalid_grant")
+            {
+                _logger.LogError(ex, "Gmail OAuth token is invalid or revoked for {EmailAddress}. Clearing stored token.", _emailAddress);
+                _gmailService = null;
+                try { await _keyVaultService.DeleteGmailTokenAsync(_emailAddress); } catch { }
+                response.Success = false;
+                response.Message = "Gmail authorization has expired or been revoked. Please re-authorize the application.";
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error retrieving emails from Gmail");

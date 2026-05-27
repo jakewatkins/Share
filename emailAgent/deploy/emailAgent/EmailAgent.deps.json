@@ -6,7 +6,7 @@
   "compilationOptions": {},
   "targets": {
     ".NETCoreApp,Version=v9.0": {
-      "EmailAgent/1.0.0": {
+      "emailAgent/1.0.0": {
         "dependencies": {
           "Azure.Identity": "1.13.1",
           "Azure.Security.KeyVault.Secrets": "4.7.0",
@@ -31,7 +31,7 @@
           "EmailAgent.emailServices.Reference": "1.2.0.0"
         },
         "runtime": {
-          "EmailAgent.dll": {}
+          "emailAgent.dll": {}
         }
       },
       "Azure.Core/1.44.1": {
@@ -908,7 +908,7 @@
     }
   },
   "libraries": {
-    "EmailAgent/1.0.0": {
+    "emailAgent/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

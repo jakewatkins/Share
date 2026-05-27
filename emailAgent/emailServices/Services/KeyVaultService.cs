@@ -175,6 +175,12 @@ namespace EmailAgent.Services
             return await GetSecretAsync(secretName, cancellationToken);
         }
 
+        public async Task DeleteGmailTokenAsync(string emailAddress, CancellationToken cancellationToken = default)
+        {
+            var secretName = GetGmailTokenSecretName(emailAddress);
+            await DeleteSecretAsync(secretName, cancellationToken);
+        }
+
         /// <summary>
         /// Stores an Outlook OAuth token in Key Vault using the standard naming convention
         /// </summary>
