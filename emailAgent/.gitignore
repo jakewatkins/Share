@@ -1,5 +1,6 @@
 Release.txt
 .env
+.env.qa
 appsettings.local.json
 appsettings.development.json
 backend.tfs
