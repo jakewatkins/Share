@@ -1,0 +1,79 @@
+# EmailServices.Api - Production/Lab Environment
+# Docker Compose configuration for lab deployment
+
+version: '3.8'
+
+services:
+  emailservices-api:
+    build:
+      context: .
+      dockerfile: EmailServices.Api/Dockerfile
+      target: final
+    container_name: emailservices-api-prod
+    ports:
+      - "80:8080"   # Map to standard HTTP port for lab access
+    env_file:
+      - .env
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - keyvaultName=kvGPSecrets
+      - Logging__LogLevel__Default=Warning
+      - Logging__LogLevel__EmailServices.Api=Information
+      - Logging__LogLevel__System=Error
+      - Logging__LogLevel__Microsoft=Error
+      # Production security settings
+      - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+    volumes:
+      # Production settings
+      - ./settings.production.json:/app/settings.json:ro
+      # Persistent logs
+      - ./data/logs:/logs
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - emailservices-prod
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.emailapi.rule=Host(`emailapi.lab.local`)"
+      - "traefik.http.services.emailapi.loadbalancer.server.port=8080"
+
+  # Reverse proxy for production (optional)
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik-emailapi
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedByDefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "8080:80"
+      - "8081:8080"  # Traefik dashboard
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - emailservices-prod
+    profiles:
+      - proxy
+
+networks:
+  emailservices-prod:
+    driver: bridge
+
+volumes:
+  prod-logs:
+    driver: local

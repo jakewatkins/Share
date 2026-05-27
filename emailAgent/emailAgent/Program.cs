@@ -41,6 +41,7 @@ class Program
             {
                 if (account.Enabled)
                 {
+                    Console.WriteLine($"Processing account: {account.Mailbox} ({account.Type})");
                     logger.LogInformation("Account configured: {Type} - {Mailbox}", account.Type, account.Mailbox);
                     var emails = await emailAccountProcessor.GetEmails(account);
                     if (emails != null)

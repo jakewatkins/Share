@@ -30,11 +30,12 @@ namespace EmailAgent.Services
         }
 
         /// <summary>
-        /// Called before MSAL accesses the cache
-        /// Loads token data from Azure Key Vault into MSAL's in-memory cache
+        /// Called before MSAL accesses the cache.
+        /// Loads token data from Azure Key Vault into MSAL's in-memory cache.
+        /// Must return Task (not void) so MSAL can await completion via SetBeforeAccessAsync.
         /// </summary>
         /// <param name="args">Token cache notification arguments</param>
-        public async void BeforeAccessNotification(TokenCacheNotificationArgs args)
+        public async Task BeforeAccessNotification(TokenCacheNotificationArgs args)
         {
             try
             {
@@ -66,11 +67,12 @@ namespace EmailAgent.Services
         }
 
         /// <summary>
-        /// Called after MSAL accesses the cache
-        /// Saves token data from MSAL's in-memory cache to Azure Key Vault
+        /// Called after MSAL accesses the cache.
+        /// Saves token data from MSAL's in-memory cache to Azure Key Vault.
+        /// Must return Task (not void) so MSAL can await completion via SetAfterAccessAsync.
         /// </summary>
         /// <param name="args">Token cache notification arguments</param>
-        public async void AfterAccessNotification(TokenCacheNotificationArgs args)
+        public async Task AfterAccessNotification(TokenCacheNotificationArgs args)
         {
             try
             {

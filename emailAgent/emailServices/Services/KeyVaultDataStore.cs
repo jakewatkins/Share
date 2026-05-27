@@ -89,8 +89,13 @@ namespace EmailAgent.Services
                     return default(T)!;
                 }
 
-                // Deserialize the JSON token
-                var token = JsonSerializer.Deserialize<T>(tokenJson);
+                // Deserialize the JSON token.
+                // PropertyNameCaseInsensitive is required because StoreAsync serializes
+                // with CamelCase (e.g. "accessToken") while C# properties are PascalCase.
+                var token = JsonSerializer.Deserialize<T>(tokenJson, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
                 _logger.LogDebug("Successfully retrieved Gmail token from Key Vault for key: {Key}", key);
                 return token!;
             }

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Threading;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
+using Microsoft.Graph.Me.Messages.Item.Move;
 using Microsoft.Identity.Client;
 using Microsoft.Identity.Client.Extensions.Msal;
 using Microsoft.Kiota.Abstractions;
@@ -342,9 +343,11 @@ namespace EmailAgent.Services
                 // Set up Key Vault-based token cache
                 var keyVaultTokenCache = new KeyVaultTokenCache(_keyVaultService, _emailAddress, _logger);
 
-                // Register Key Vault token cache callbacks with MSAL
-                app.UserTokenCache.SetBeforeAccess(keyVaultTokenCache.BeforeAccessNotification);
-                app.UserTokenCache.SetAfterAccess(keyVaultTokenCache.AfterAccessNotification);
+                // Register Key Vault token cache callbacks with MSAL using the async API.
+                // SetBeforeAccessAsync / SetAfterAccessAsync accept Func<..., Task> so MSAL
+                // awaits completion before proceeding — critical for Key Vault I/O.
+                app.UserTokenCache.SetBeforeAccessAsync(keyVaultTokenCache.BeforeAccessNotification);
+                app.UserTokenCache.SetAfterAccessAsync(keyVaultTokenCache.AfterAccessNotification);
 
                 _logger.LogDebug("Created PublicClientApplication with Azure Key Vault token cache for: {EmailAddress}", _emailAddress);
 
@@ -465,6 +468,79 @@ namespace EmailAgent.Services
             }
 
             return "unknown";
+        }
+
+        public async Task<CreateFolderResponse> CreateFolder(string folderName)
+        {
+            if (string.IsNullOrWhiteSpace(folderName))
+                throw new ArgumentException("Folder name cannot be empty", nameof(folderName));
+
+            try
+            {
+                _logger.LogInformation("Creating Outlook folder {FolderName} for {EmailAddress}", folderName, _emailAddress);
+
+                var graphClient = await EnsureConnectionAsync();
+                var mailFolder = new MailFolder { DisplayName = folderName };
+                var created = await graphClient.Me.MailFolders.PostAsync(mailFolder);
+
+                _logger.LogInformation("Successfully created Outlook folder {FolderName} with ID {FolderId}", created?.DisplayName, created?.Id);
+                return new CreateFolderResponse
+                {
+                    Success = true,
+                    FolderName = created?.DisplayName ?? folderName,
+                    ServiceSpecificId = created?.Id,
+                    Service = EmailService.Outlook
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating Outlook folder {FolderName}", folderName);
+                return new CreateFolderResponse { Success = false, Message = ex.Message, Service = EmailService.Outlook };
+            }
+        }
+
+        public async Task<bool> MoveEmailToFolder(string emailId, string destinationFolder)
+        {
+            if (string.IsNullOrWhiteSpace(emailId))
+                throw new ArgumentException("Email ID cannot be empty", nameof(emailId));
+            if (string.IsNullOrWhiteSpace(destinationFolder))
+                throw new ArgumentException("Destination folder cannot be empty", nameof(destinationFolder));
+
+            try
+            {
+                _logger.LogInformation("Moving email {EmailId} to folder {Folder} for {EmailAddress}", emailId, destinationFolder, _emailAddress);
+
+                var graphClient = await EnsureConnectionAsync();
+
+                // Resolve destination: try by displayName first, then treat the value as a folder ID
+                string? folderId = null;
+
+                var foldersResponse = await graphClient.Me.MailFolders.GetAsync(config =>
+                {
+                    config.QueryParameters.Filter = $"displayName eq '{destinationFolder}'";
+                });
+
+                if (foldersResponse?.Value?.Count > 0)
+                {
+                    folderId = foldersResponse.Value[0].Id;
+                }
+                else
+                {
+                    // Assume the caller passed a folder ID directly
+                    folderId = destinationFolder;
+                }
+
+                var moveBody = new MovePostRequestBody { DestinationId = folderId };
+                await graphClient.Me.Messages[emailId].Move.PostAsync(moveBody);
+
+                _logger.LogInformation("Successfully moved email {EmailId} to folder {Folder}", emailId, destinationFolder);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error moving email {EmailId} to folder {Folder}", emailId, destinationFolder);
+                return false;
+            }
         }
 
         /// <summary>

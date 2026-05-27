@@ -1,0 +1,59 @@
+# Build artifacts
+bin/
+obj/
+
+# IDE files
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln.docstates
+
+# Test results
+TestResults/
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
+# NuGet packages
+packages/
+*.nupkg
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+temp/
+*.tmp
+*.temp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+*.env
+*.env.local
+
+# Documentation
+*.md
+!README.md
+
+# Backup files
+backup*/
+**/backup_tokens/
+gmail_tokens/
+
+# Settings that shouldn't be copied
+settings.development.json
+settings.local.json
